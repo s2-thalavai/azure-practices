@@ -357,6 +357,92 @@ Notice how resources are listed as they're created and the status changes to a g
 
 ![alt text](./assets/wordpress-website/image-14.png)
 
+
+
+
+## Microsoft Azure Database, Analytics, & Compute Services
+
+ several of the database services that are available on Microsoft Azure, such as Azure Cosmos DB, Azure SQL Database, Azure SQL Managed Instance, Azure Database for MySQL, and Azure Database for PostgreSQL. 
+ 
+ In addition, you'll learn about several of the big data and analysis services in Azure. 
+ 
+also learn how to take advantage of several virtualization services in Azure compute, which can help your applications scale out quickly and efficiently to meet increasing demands.
+
+## Learning Objectives
+
+        Describe Azure Cosmos DB
+        Describe Azure SQL Database and SQL Managed Instance
+        Describe Azure Database for MySQL and PostgreSQL
+        Explore big data and analytics
+        Explore Azure virtual machines and app services
+        Explain Azure container instances and Kubernetes services
+        Explore Azure functions and Windows virtual desktop
+        Describe the benefits and usage of Azure Data Lake Analytics
+        Describe the benefits and usage of Azure Synapse Analytics, Azure HDInsight, Azure Databricks
+        Describe the benefits and usage of Azure Database for PostgreSQL
+        Describe the benefits and usage of Azure Database for MySQL
+        Describe the benefits and usage of Azure Cosmos DB, Azure SQL Database, Azure SQL Managed Instance
+        Describe the benefits and usages of Azure Virtual Machines, Azure App Service, Azure Container Instances, Azure Kubernetes Service, Azure Functions, Windows Virtual Desktop
+
+
+
+
+
+
+
+## Learn more
+
+If you want to find out some more information on the topics covered in this lesson, click on the links below:
+
+Azure database documentation
+
+Azure Analytics Services 
+
+Azure Cosmos DB documentation 
+
+Azure SQL Database documentation 
+
+Azure SQL Managed Instance documentation 
+
+Azure Database for MySQL documentation 
+
+Azure Database for PostgreSQL documentation 
+
+Migrating database workloads to Azure
+
+Migrate SQL workloads to Azure 
+
+Migrate SQL Workloads to Azure SQL Databases 
+
+Migrate SQL Workloads to Azure Managed Instances 
+
+Migrate on-premises MySQL databases to Azure Database for MySQL 
+
+Working with Azure databases
+
+Create an Azure Database for PostgreSQL server 
+
+Insert and query data in your Azure Cosmos DB database 
+
+Provision an Azure SQL database to store application data 
+
+
+
+### Detailed list of the differences between Azure SQL Database and Azure SQL Managed Instance
+
+Features comparison: Azure 
+https://learn.microsoft.com/en-us/azure/azure-sql/database/features-comparison?view=azuresql
+
+SQL Database and Azure SQL Managed Instance 
+https://learn.microsoft.com/en-us/azure/azure-sql/database/features-comparison?view=azuresql
+
+
+### Detailed description of the migration process
+
+Migration guide: SQL Server to SQL Managed Instance
+https://learn.microsoft.com/en-us/data-migration/sql-server/managed-instance/guide
+
+
 ## certification Links:
 
 
