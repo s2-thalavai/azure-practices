@@ -1,5 +1,69 @@
 # Microsoft Azure Practices
 
+## Do I need Service Mesh
+
+built a layered perimeter that handles:
+
+    North-south traffic control (public APIM → private NGINX Ingress → private AKS)
+    
+    Network isolation (private cluster, private ingress)
+    
+    Centralized API exposure (APIM as the public gateway)
+    
+    TLS termination and routing (at APIM)
+    
+### Might Not Need a Service Mesh If:
+    
+    not doing complex service-to-service routing (e.g., canary, A/B, failover).
+    
+    You’ve already implemented mTLS or secure payload encryption between services.
+    
+    managing observability and tracing via Azure Monitor, App Insights, or custom logging.
+    
+    You want to minimize sidecar overhead and keep your cluster lean.
+    
+    You’ve got tight ingress control and don’t expose internal services directly.
+
+### Might Consider a Service Mesh If:
+
+    You want fine-grained control over pod-to-pod communication, especially for internal APIs.
+    
+    You need automatic mTLS between services without manual cert rotation.
+    
+    You’re scaling to multi-team microservices and want centralized policy enforcement.
+    
+    You want L7 authorization (e.g., allow only certain services to call /api/secure).
+    
+    You’re troubleshooting intermittent service issues and need distributed tracing.
+
+
+### Current Setup vs Service Mesh
+    
+    Capability	            Your Setup (APIM + NGINX + AKS)	            Service Mesh (e.g., Istio, Linkerd)
+    
+    Public                  API Gateway	                                ✅ APIM	Optional
+    Ingress Control	        ✅ NGINX	                                  ✅ Ingress Gateway
+    Pod-to-Pod Security	    🔶 NetworkPolicies/manual mTLS	            ✅ Automatic mTLS
+    API-Level AuthZ	        🔶 App-level or APIM policies	              ✅ Istio AuthorizationPolicy
+    Observability	          ✅ Azure Monitor/App Insights	              ✅ Prometheus + Jaeger
+    Traffic Shaping	        🔶 NGINX-level	                            ✅ Per-service routing rules
+
+Given your focus on secure payload flows, cost optimization, and modular design, 
+you might not need a full mesh unless:
+
+    You’re planning to scale internal APIs across teams or environments.
+    
+    You want centralized enforcement of internal access policies.
+    
+    You’re hitting visibility or security gaps in east-west traffic.
+
+If you're just looking to restrict pod-to-pod access for specific APIs, 
+you could start with Kubernetes NetworkPolicies and app-level auth, and only adopt a mesh if those controls become too brittle or hard to manage.
+
+
+### How would a service mesh impact my current setup?
+
+
 ## AZ Monitor:
   
   To monitor your AKS, Azure Functions, Static Web Apps, and Azure SQL DB using Azure Monitor, 
