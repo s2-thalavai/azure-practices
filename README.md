@@ -7,13 +7,13 @@
 
 ### Estimated Monthly Cost Breakdown (Azure Monitor + Workbooks)
     
-    Resource	                Log Volume (Est.)	            Pricing Tier	          Cost/GB	            Monthly Cost
+    Resource	                  Log Volume (Est.)	            Pricing Tier	          Cost/GB	            Monthly Cost
     
-    AKS (Container Insights)	20 GB	                        Analytics Logs	        $2.30	              ~$46.00
-    Azure Functions	          10 GB	                        Basic Logs	            $0.50	              ~$5.00
-    Static Web Apps	          5 GB	                        Basic Logs	            $0.50	              ~$2.50
-    Azure SQL DB	            10 GB	                        Analytics Logs	        $2.30	              ~$23.00
-    Workbook Queries	        —	                            Included	              —	                   $0.00
+    AKS (Container Insights)      20 GB	                        Analytics Logs	          $2.30	              ~$46.00
+    Azure Functions               10 GB	                        Basic Logs	              $0.50	              ~$5.00
+    Static Web Apps               05 GB	                        Basic Logs	              $0.50	              ~$2.50
+    Azure SQL DB                  10 GB	                        Analytics Logs	          $2.30	              ~$23.00
+    Workbook Queries	           —                           Included	                —	                   $0.00
     
     🔹 **Total Estimated Cost: ~$76.50/month**
 
