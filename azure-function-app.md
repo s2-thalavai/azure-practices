@@ -66,3 +66,97 @@ This creates a folder with your function and a host.json file.
 
 <img width="844" height="589" alt="image" src="https://github.com/user-attachments/assets/6affe5b4-d65a-443d-b00d-efc92dec45d2" />
 
+## Code to Send Mail using SMTP
+        
+        require('dotenv').config();
+        const nodemailer = require('nodemailer');
+        
+        module.exports = async function (context, req) {
+            context.log('SMTP Email Function Triggered');
+        
+            try {
+                const { to, subject, text, html } = req.body || {};
+        
+                // Validate required fields
+                if (!to || !subject || (!text && !html)) {
+                    context.res = {
+                        status: 400,
+                        body: "Missing required fields: 'to', 'subject', and either 'text' or 'html'."
+                    };
+                    return;
+                }
+        
+                // Create transporter
+                const transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST || 'smtp.example.com',
+                    port: parseInt(process.env.SMTP_PORT) || 587,
+                    secure: parseInt(process.env.SMTP_PORT) === 465, // true for 465
+                    auth: {
+                        user: process.env.SMTP_USER,
+                        pass: process.env.SMTP_PASS
+                    }
+                });
+        
+                // Mail options
+                const mailOptions = {
+                    from: `"Azure Function" <${process.env.SMTP_USER}>`,
+                    to,
+                    subject,
+                    text,
+                    html
+                };
+        
+                // Send mail
+                const info = await transporter.sendMail(mailOptions);
+                context.log('Email sent: ${info.messageId}');
+        
+                context.res = {
+                    status: 200,
+                    body: {
+                        message: "Email sent successfully",
+                        messageId: info.messageId,
+                        to
+                    }
+                };
+            } catch (error) {
+                context.log.error('Error sending email:', error);
+        
+                context.res = {
+                    status: 500,
+                    body: {
+                        message: "Failed to send email",
+                        error: error.message,
+                        timestamp: new Date().toISOString()
+                    }
+                };
+            }
+        };
+
+### local.settings.json
+
+        {
+          "IsEncrypted": false,
+          "Values": {  
+            "SMTP_HOST": "smtp.office365.com",
+            "SMTP_PORT": "587",
+            "SMTP_USER": "noreply@gmail.com",
+            "SMTP_PASS": "Password"
+          }
+        }
+
+### input
+
+        {
+          "to": "recipient@example.com",
+          "subject": "Test Email",
+          "text": "This is a plain text email.",
+          "html": "<p>This is an <strong>HTML</strong> email.</p>"
+        }
+
+### output:
+
+        {
+          "message": "Email sent successfully",
+          "messageId": "<5943cf71-1ca4-ee6d-dce2-dc45ae87d403@marlabs.com>",
+          "to": "recipient@example.com"
+        }
