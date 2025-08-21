@@ -204,7 +204,7 @@ This creates a folder with your function and a host.json file.
             }
           ]
         }
-        2025-08-21T07:10:24Z   [Information]   ✅ Validation passed. Proceeding with email dispatch...
+        2025-08-21T07:10:24Z   [Information]   Validation passed. Proceeding with email dispatch...
         2025-08-21T07:10:24Z   [Information]   Executed 'Functions.cnf-mail-sbt-trigger' (Succeeded, Id=07f6b51e-0a4d-41a5-88dc-af000e017fed, Duration=4ms)
 
         
