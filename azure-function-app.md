@@ -1,6 +1,14 @@
 ## Azure Function app using JavaScript with Node Runtime
 
-### Code:
+### 1. Create a Local Function App
+
+        func init MyFunctionApp --javascript
+        cd MyFunctionApp
+        func new --name HttpTrigger --template "HTTP trigger" --authlevel "anonymous"
+
+This creates a folder with your function and a host.json file.
+
+### 2. Function Code
 
     module.exports = async function (context, req) {
     
@@ -27,6 +35,28 @@
             };
         }
     };
+
+### 3. Run Locally
+
+    func start
+    
+**output**:
+
+    HttpTrigger: [GET,POST] http://localhost:7071/api/HttpTrigger
+
+### test on local:
+
+    curl http://localhost:7071/api/HttpTrigger?name=Siva
+
+    Or 
+    
+    use Postman to send a POST request with a JSON body:
+
+    {
+      "name": "Sivasankar Thalavai"
+    }
+
+### test on Azure portal:
 
 ### Input:
 
