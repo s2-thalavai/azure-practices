@@ -1,4 +1,4 @@
-## Azure Function app using JavaScript with Node Runtime
+## Azure Function app Http Trigger using JavaScript with Node Runtime
 
 ### 1. Create a Local Function App
 
@@ -160,3 +160,51 @@ This creates a folder with your function and a host.json file.
           "messageId": "<5943cf71-1ca4-ee6d-dce2-dc45ae87d403@marlabs.com>",
           "to": "recipient@example.com"
         }
+## Azure Function app Service Bus Trigger using JavaScript with Node Runtime
+
+### Code Sample
+
+        module.exports = async function (context, mySbMsg) {
+        
+            context.log('Service Bus Triggered');
+        
+            try {
+                context.log('Raw message:', mySbMsg);
+        
+                const parsedMessage = typeof mySbMsg === 'string' ? JSON.parse(mySbMsg) : mySbMsg;
+                context.log('Parsed message:', parsedMessage);
+        
+                const { recipientEmails, fromEmail } = parsedMessage;
+        
+                if (!Array.isArray(recipientEmails) || !fromEmail) {
+                    context.log.warn('Missing required fields: recipientEmails or fromEmail');
+                    return;
+                }
+        
+                context.log('Validation passed. Proceeding with email dispatch...');
+                // Continue with transporter and email logic...
+            } catch (error) {
+                context.log.error('Fatal error during function execution:', error.message);
+                context.log.error('Stack trace:', error.stack);
+            }
+        };
+
+### output:
+        
+        2025-08-21T07:10:24Z   [Information]   Parsed message: {
+          appName: 'TIMESHEET',
+          fromEmail: 'DoNotReply@gmail.com',
+          recipientEmails: [
+            {
+              toEmail: [Array],
+              ccEmail: [Array],
+              bccEmail: [Array],
+              emailSubject: 'Timesheet Reminder',
+              emailTemplate: '<p>Hello, please submit your timesheet by EOD.</p>'
+            }
+          ]
+        }
+        2025-08-21T07:10:24Z   [Information]   ✅ Validation passed. Proceeding with email dispatch...
+        2025-08-21T07:10:24Z   [Information]   Executed 'Functions.cnf-mail-sbt-trigger' (Succeeded, Id=07f6b51e-0a4d-41a5-88dc-af000e017fed, Duration=4ms)
+
+        
