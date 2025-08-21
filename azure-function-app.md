@@ -174,15 +174,64 @@ This creates a folder with your function and a host.json file.
                 const parsedMessage = typeof mySbMsg === 'string' ? JSON.parse(mySbMsg) : mySbMsg;
                 context.log('Parsed message:', parsedMessage);
         
-                const { recipientEmails, fromEmail } = parsedMessage;
+                const { recipientEmails, appName } = parsedMessage;
         
-                if (!Array.isArray(recipientEmails) || !fromEmail) {
-                    context.log.warn('Missing required fields: recipientEmails or fromEmail');
+                if (!Array.isArray(recipientEmails)) {
+                    context.log.warn('Missing required fields: recipientEmails');
                     return;
                 }
         
                 context.log('Validation passed. Proceeding with email dispatch...');
-                // Continue with transporter and email logic...
+        
+                const transporter = nodemailer.createTransport({
+                    host: process.env.SMTP_HOST || 'smtp.office365.com',
+                    port: parseInt(process.env.SMTP_PORT) || 587,
+                    secure: String(process.env.SMTP_PORT) === '465',
+                    auth: {
+                        user: process.env.SMTP_USER,
+                        pass: process.env.SMTP_PASS
+                    }
+                });
+        
+                context.log('Transporter created. Dispatching emails...');
+        
+                const sendEmailTasks = recipientEmails.map(async (recipient) => {
+                const toAddresses = Array.isArray(recipient.toEmail) ? recipient.toEmail : [];
+                const ccAddresses = Array.isArray(recipient.ccEmail) ? recipient.ccEmail : [];
+                const bccAddresses = Array.isArray(recipient.bccEmail) ? recipient.bccEmail : [];
+                const subject = recipient.emailSubject;
+                const html = recipient.emailTemplate;
+        
+                if (!toAddresses.length || !subject || !html) {
+                    context.log.warn(`Skipped email: Missing fields for ${JSON.stringify(toAddresses)}`);
+                    return;
+                }
+        
+                const mailOptions = {
+                    from: `"Azure Function" <${process.env.SMTP_USER}>`,
+                    to: toAddresses,
+                    cc: ccAddresses,
+                    bcc: bccAddresses,
+                    subject,
+                    html
+                };
+        
+                try {
+                    const info = await transporter.sendMail(mailOptions);
+                    context.log(`Email sent to ${toAddresses.join(', ')} | Message ID: ${info.messageId}`);
+                } catch (error) {
+                    context.log.error(`Failed to send email to ${toAddresses.join(', ')}`, error);
+                }
+            });
+                    
+            const emailResults = await Promise.all(sendEmailTasks);
+            context.res = {
+                status: 200,
+                body: emailResults,
+            };       
+        
+            context.log('All email tasks completed.');
+        
             } catch (error) {
                 context.log.error('Fatal error during function execution:', error.message);
                 context.log.error('Stack trace:', error.stack);
@@ -192,19 +241,16 @@ This creates a folder with your function and a host.json file.
 ### output:
         
         2025-08-21T07:10:24Z   [Information]   Parsed message: {
-          appName: 'TIMESHEET',
           fromEmail: 'DoNotReply@gmail.com',
           recipientEmails: [
             {
               toEmail: [Array],
               ccEmail: [Array],
               bccEmail: [Array],
-              emailSubject: 'Timesheet Reminder',
-              emailTemplate: '<p>Hello, please submit your timesheet by EOD.</p>'
+              emailSubject: 'Reminder',
+              emailTemplate: '<p>Hello, please submit your EOD.</p>'
             }
           ]
         }
         2025-08-21T07:10:24Z   [Information]   Validation passed. Proceeding with email dispatch...
-        2025-08-21T07:10:24Z   [Information]   Executed 'Functions.cnf-mail-sbt-trigger' (Succeeded, Id=07f6b51e-0a4d-41a5-88dc-af000e017fed, Duration=4ms)
-
-        
+        2025-08-21T07:10:24Z   [Information]   Executed 'Functions.cnf-mail-sbt-trigger' (Succeeded, Id=07f6b51e-0a4d-41a5-88dc-af000e017fed, Duration=4ms)   
