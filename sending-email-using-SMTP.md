@@ -104,3 +104,84 @@ npm ci
   Set alerts on Function errors or Service Bus dead-letter growth
 
 ---
+
+
+## 2. Add Retry Logic for Transient SMTP Failures
+
+Wrap sendMail in a retry loop with exponential backoff:
+
+```js
+const sendWithRetry = async (mailOptions, retries = 3) => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await transporter.sendMail(mailOptions);
+        } catch (error) {
+            if (attempt === retries) throw error;
+            await new Promise(res => setTimeout(res, 1000 * Math.pow(2, attempt)));
+        }
+    }
+};
+```
+
+---
+
+### Replace:
+
+```js
+const info = await transporter.sendMail(mailOptions);
+```
+
+### With:
+
+```js
+const info = await sendWithRetry(mailOptions);
+```
+---
+
+### 3. Audit-Friendly Logging
+
+Include appName, recipient count, and status summary in final logs:
+
+```js
+context.log(`${appName} dispatch complete. Total: ${emailResults.length}, Sent: ${emailResults.filter(e => e.status === 'sent').length}, Failed: ${emailResults.filter(e => e.status === 'failed').length}`);
+```
+
+### 4. Optional: Modularize Dispatcher
+
+Extract the email dispatch logic into a reusable function for onboarding clarity:
+
+```js
+async function dispatchEmail(recipient, appName, transporter, semaphore, context, emailResults) {
+    const toAddresses = parseAddresses(recipient.toEmail);
+    const ccAddresses = parseAddresses(recipient.ccEmail);
+    const bccAddresses = parseAddresses(recipient.bccEmail);
+    const subject = recipient.emailSubject;
+    const html = recipient.emailTemplate;
+
+    if (!toAddresses.length || !subject || !html) {
+        context.log.warn(`Skipped email: Missing fields for ${JSON.stringify(toAddresses)}`);
+        return;
+    }
+
+    const mailOptions = {
+        from: `"Azure Function" <${process.env.SMTP_USER}>`,
+        to: toAddresses,
+        cc: ccAddresses.length ? ccAddresses : undefined,
+        bcc: bccAddresses.length ? bccAddresses : undefined,
+        subject,
+        html
+    };
+
+    try {
+        await semaphore.use(async () => {
+            const info = await sendWithRetry(mailOptions);
+            context.log(`Email sent to ${toAddresses.join(', ')} | Message ID: ${info.messageId}`);
+            emailResults.push({ to: toAddresses, status: 'sent', messageId: info.messageId });
+        });
+    } catch (error) {
+        context.log.error(`Failed to send email to ${toAddresses.join(', ')}`, error.message);
+        emailResults.push({ to: toAddresses, status: 'failed', error: error.message });
+    }
+}
+```
+---
