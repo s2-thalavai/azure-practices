@@ -1,17 +1,60 @@
 # Azure Function Deployment Checklist (Node.js + External Modules)
 
+Azure Function that sends emails via SMTP, triggered by Azure Service Bus, with concurrency control using await-semaphore.
+
 ## 1. Project Structure
+
+Deployment Architecture: Azure Function + SMTP + Semaphore
+
+```
+┌──────────────────────────────┐
+│      Azure Service Bus       │
+│ ──────────────────────────── │
+│  Topic: bookingmessagetopic  │
+│  Subscription: bookingsubscribe │
+└────────────┬─────────────────┘
+             │
+             ▼
+┌──────────────────────────────┐
+│     Azure Function App       │
+│ ──────────────────────────── │
+│ Function: booking-cnf-mail-sbt-trigger │
+│ Runtime: Node.js             │
+│ Dependencies:                │
+│   - nodemailer               │
+│   - await-semaphore          │
+│   - dotenv                   │
+└────────────┬─────────────────┘
+             │
+             ▼
+┌──────────────────────────────┐
+│  SMTP Transporter (Office365)│
+│ ──────────────────────────── │
+│  Host: smtp.office365.com    │
+│  Port: 587                   │
+│  Auth: SMTP_USER / SMTP_PASS │
+│  Limit: ~3 concurrent sends  │
+└────────────┬─────────────────┘
+             │
+             ▼
+┌──────────────────────────────┐
+│      Email Recipients        │
+│ ──────────────────────────── │
+│  To / CC / BCC               │
+│  Subject / HTML Template     │
+└──────────────────────────────┘
+```
 
 ### Ensure your function folder contains:
 
-  ```Code
-  booking-cnf-mail-sbt-trigger/
-  ├── index.js
-  ├── function.json
-  ├── package.json
-  ├── node_modules/
-  ├── .env
-  ```
+```Code
+notifcation-mail-sbt-trigger/
+├── index.js               # Main function logic
+├── function.json          # Azure Function binding configuration
+├── package.json           # Dependency declarations
+├── node_modules/          # Installed modules (must be deployed)
+├── .env                   # Local SMTP credentials (excluded from source control)
+```
 ---
 ### 2. Install Required Modules
 
