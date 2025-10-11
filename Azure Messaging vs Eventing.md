@@ -67,3 +67,73 @@ Azure offers four core messaging and event services—
 - Service Bus to queue invoices for semantic extraction.
 
 - Event Hubs to ingest telemetry from OCR or AI agents.
+
+---
+
+# Azure Messaging vs Event Services
+
+Azure offers multiple messaging and eventing services tailored for different communication patterns. Here's a categorized comparison to guide architectural decisions.
+
+---
+
+## Messaging Services
+
+| Service | Description | Use Cases |
+|--------|-------------|-----------|
+| **Azure Service Bus** | Enterprise-grade messaging with queues and topics | Order processing, decoupled microservices, retry logic |
+| **Azure Storage Queues** | Simple, cost-effective queueing | Background tasks, batch processing |
+| **Azure Relay** | Direct hybrid messaging between cloud and on-prem | Firewall-friendly communication, hybrid apps |
+
+---
+
+## Event Services
+
+| Service | Description | Use Cases |
+|--------|-------------|-----------|
+| **Azure Event Grid** | Reactive event routing across services | Blob uploads, resource changes, custom events |
+| **Azure Event Hubs** | High-throughput event ingestion | Telemetry, IoT, real-time analytics, Kafka-style streaming |
+
+---
+
+## Decision Matrix
+
+| Criteria | Service Bus | Storage Queues | Event Grid | Event Hubs |
+|---------|-------------|----------------|------------|------------|
+| **Message intent** | Commands | Tasks | Facts | Telemetry |
+| **Delivery guarantee** | At-least-once | At-least-once | Push-based | Partitioned stream |
+| **Ordering** | FIFO (with sessions) | No guarantee | No guarantee | Per partition |
+| **Throughput** | Moderate | Low | High | Very high |
+| **Latency** | Low | Low | Very low | Low |
+| **Protocol** | AMQP | REST | HTTP/Webhooks | Kafka/AMQP |
+| **Integration** | Azure Functions, Logic Apps | Azure Functions | Functions, Logic Apps, Event Subscriptions | Stream Analytics, Functions, Kafka clients |
+
+---
+
+## Best Fit Scenarios
+
+- **Service Bus**: Reliable messaging with retries and dead-lettering
+- **Storage Queues**: Lightweight, cost-effective task queues
+- **Event Grid**: Reactive workflows triggered by cloud events
+- **Event Hubs**: Real-time ingestion of telemetry or logs
+
+---
+
+> Tip: Combine Event Grid + Service Bus for hybrid workflows—e.g., trigger invoice validation on blob upload, then queue for semantic extraction.
+
+
+# Architecture Diagram: Invoice Validation Pipeline
+
+```Code
+
+[Blob Storage] --(upload event)--> [Event Grid]
+     ↓                                 ↓
+[Raw Invoice]                  [Azure Function: Trigger]
+                                   ↓
+                          [Service Bus Queue]
+                                   ↓
+                          [Azure Function: Validator]
+                                   ↓
+                          [Audit Log Storage]
+                                   ↓
+                          [Validated Queue or Cosmos DB]
+```
