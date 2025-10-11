@@ -124,3 +124,113 @@ These functions **automatically scale** and only **consume resources while runni
 - Log audit trail (status, timestamp, retry count)
 
 - Emit result to downstream queue or storage
+
+## Folder Structure
+
+```Code
+InvoiceValidatorFunction/
+├── function.json
+├── index.js (or main.py / run.csx)
+├── auditLogger.js
+├── validator.js
+├── bindings/
+│   └── blobTrigger.json
+├── utils/
+│   └── retryTracker.js
+```
+
+### Sample: index.js (Node.js)
+
+```javascript
+const { validateInvoice } = require('./validator');
+const { logAudit } = require('./auditLogger');
+const { trackRetry } = require('./utils/retryTracker');
+
+module.exports = async function (context, invoiceBlob) {
+  const invoice = JSON.parse(invoiceBlob);
+  const retryInfo = trackRetry(context);
+
+  const result = validateInvoice(invoice);
+  await logAudit({
+    invoiceId: invoice.id,
+    vendor: invoice.vendor,
+    status: result.status,
+    timestamp: new Date().toISOString(),
+    retryCount: retryInfo.count,
+    functionInvocationId: context.invocationId
+  });
+
+  context.log(`Invoice ${invoice.id} processed: ${result.status}`);
+  context.bindings.outputQueue = JSON.stringify(result);
+};
+
+```
+
+### validator.js
+
+```javascript
+function validateInvoice(invoice) {
+  const rules = {
+    vendor: v => v && v.length > 2,
+    amount: a => a > 0,
+    date: d => !isNaN(Date.parse(d))
+  };
+
+  const status = Object.entries(rules).every(([key, rule]) => rule(invoice[key]))
+    ? 'VALID'
+    : 'INVALID';
+
+  return { id: invoice.id, status };
+}
+
+module.exports = { validateInvoice };
+````
+
+### auditLogger.js
+
+```javascript
+const { BlobServiceClient } = require('@azure/storage-blob');
+
+async function logAudit(entry) {
+  const blobClient = BlobServiceClient.fromConnectionString(process.env.AUDIT_STORAGE);
+  const container = blobClient.getContainerClient('audit-logs');
+  const blobName = `${entry.invoiceId}-${Date.now()}.json`;
+  const blockBlob = container.getBlockBlobClient(blobName);
+  await blockBlob.upload(JSON.stringify(entry), Buffer.byteLength(JSON.stringify(entry)));
+}
+
+module.exports = { logAudit };
+```
+
+### retryTracker.js
+```javascript
+function trackRetry(context) {
+  const count = context.retryContext?.retryCount || 0;
+  return { count };
+}
+
+module.exports = { trackRetry };
+```
+
+### Bindings: function.json
+
+```json
+{
+  "bindings": [
+    {
+      "name": "invoiceBlob",
+      "type": "blobTrigger",
+      "direction": "in",
+      "path": "invoices/{name}",
+      "connection": "AzureWebJobsStorage"
+    },
+    {
+      "name": "outputQueue",
+      "type": "queue",
+      "direction": "out",
+      "queueName": "validated-invoices",
+      "connection": "AzureWebJobsStorage"
+    }
+  ]
+}
+```
