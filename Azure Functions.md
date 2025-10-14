@@ -287,23 +287,23 @@ Choose HttpTrigger → give it a name (e.g., HelloFunction) → Authorization le
 
 ### Step 4: Function Code Example
 
-Inside HelloFunction/index.js:
+Inside fetchTokenHttpTrigger.js:
 
 ```
-module.exports = async function (context, req) {
-    context.log('HTTP trigger function processed a request.');
+const { app } = require('@azure/functions');
 
-    const name = req.query.name || (req.body && req.body.name);
+app.http('fetchTokenHttpTrigger', {
+    methods: ['GET', 'POST'],
+    authLevel: 'anonymous',
+    handler: async (request, context) => {
+        context.log(`Http function processed request for url "${request.url}"`);
 
-    const responseMessage = name
-        ? `Hello, ${name}!`
-        : 'Hello! Pass a name in the query string or in the request body.';
+        const name = request.query.get('name') || await request.text() || 'world';
 
-    context.res = {
-        // status: 200, /* Defaults to 200 */
-        body: responseMessage
-    };
-};
+        return { body: `Hello, ${name}!` };
+    }
+});
+
 ```
 
 ### Step 5: Run Locally
