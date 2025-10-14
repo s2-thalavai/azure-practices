@@ -234,3 +234,121 @@ module.exports = { trackRetry };
   ]
 }
 ```
+---
+
+### Step 1: Prerequisites
+
+Make sure you have installed:
+
+1. Node.js (LTS recommended)
+
+2. Azure Functions Core Tools (npm install -g azure-functions-core-tools@4 --unsafe-perm true)
+
+3. Azure CLI (for deployment)
+
+4. Optional: VS Code with Azure Functions extension
+
+Check installation:
+
+  node -v
+  func --version
+  az --version
+
+### Step 2: Create a New Function App
+
+# Create project folder
+mkdir MyFunctionApp
+cd MyFunctionApp
+
+# Initialize function app
+func init . --worker-runtime node --language javascript
+
+  --worker-runtime node → Node.js runtime
+  
+  --language javascript → JS function (use --language typescript for TypeScript)
+
+### Step 3: Add a New Function
+
+# Add HTTP-triggered function
+
+   func new
+
+
+You will see a prompt:
+
+```
+Select a template: 
+1. HttpTrigger
+2. TimerTrigger
+...
+```
+
+Choose HttpTrigger → give it a name (e.g., HelloFunction) → Authorization level (Anonymous for public access, Function for key-protected).
+
+### Step 4: Function Code Example
+
+Inside HelloFunction/index.js:
+
+```
+module.exports = async function (context, req) {
+    context.log('HTTP trigger function processed a request.');
+
+    const name = req.query.name || (req.body && req.body.name);
+
+    const responseMessage = name
+        ? `Hello, ${name}!`
+        : 'Hello! Pass a name in the query string or in the request body.';
+
+    context.res = {
+        // status: 200, /* Defaults to 200 */
+        body: responseMessage
+    };
+};
+```
+
+### Step 5: Run Locally
+
+   func start
+
+Open browser → http://localhost:7071/api/HelloFunction?name=John
+
+You should see:
+
+   Hello, John!
+
+### Step 6: Deploy to Azure
+
+Login to Azure:
+
+  az login
+
+Create a Function App in Azure:
+
+# Variables
+RESOURCE_GROUP=myResourceGroup
+FUNCTION_APP_NAME=myfuncapp12345
+STORAGE_ACCOUNT=mystorageacct12345
+LOCATION=CentralIndia
+
+# Create resource group
+az group create --name $RESOURCE_GROUP --location $LOCATION
+
+# Create storage account
+az storage account create --name $STORAGE_ACCOUNT --location $LOCATION --resource-group $RESOURCE_GROUP --sku Standard_LRS
+
+# Create function app
+az functionapp create --resource-group $RESOURCE_GROUP --consumption-plan-location $LOCATION --runtime node --runtime-version 18 --functions-version 4 --name $FUNCTION_APP_NAME --storage-account $STORAGE_ACCOUNT
+
+
+Deploy your function:
+
+  func azure functionapp publish $FUNCTION_APP_NAME
+
+Get your function URL:
+
+az functionapp function show --function-name HelloFunction --name $FUNCTION_APP_NAME --resource-group $RESOURCE_GROUP
+
+
+Your HTTP-triggered Azure Function is live!
+
+---
