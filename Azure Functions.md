@@ -125,364 +125,41 @@ These functions **automatically scale** and only **consume resources while runni
 
 - Emit result to downstream queue or storage
 
-## Folder Structure
-
-```Code
-InvoiceValidatorFunction/
-├── function.json
-├── index.js (or main.py / run.csx)
-├── auditLogger.js
-├── validator.js
-├── bindings/
-│   └── blobTrigger.json
-├── utils/
-│   └── retryTracker.js
-```
-
-### Sample: index.js (Node.js)
-
-```javascript
-const { validateInvoice } = require('./validator');
-const { logAudit } = require('./auditLogger');
-const { trackRetry } = require('./utils/retryTracker');
-
-module.exports = async function (context, invoiceBlob) {
-  const invoice = JSON.parse(invoiceBlob);
-  const retryInfo = trackRetry(context);
-
-  const result = validateInvoice(invoice);
-  await logAudit({
-    invoiceId: invoice.id,
-    vendor: invoice.vendor,
-    status: result.status,
-    timestamp: new Date().toISOString(),
-    retryCount: retryInfo.count,
-    functionInvocationId: context.invocationId
-  });
-
-  context.log(`Invoice ${invoice.id} processed: ${result.status}`);
-  context.bindings.outputQueue = JSON.stringify(result);
-};
-
-```
-
-### validator.js
-
-```javascript
-function validateInvoice(invoice) {
-  const rules = {
-    vendor: v => v && v.length > 2,
-    amount: a => a > 0,
-    date: d => !isNaN(Date.parse(d))
-  };
-
-  const status = Object.entries(rules).every(([key, rule]) => rule(invoice[key]))
-    ? 'VALID'
-    : 'INVALID';
-
-  return { id: invoice.id, status };
-}
-
-module.exports = { validateInvoice };
-````
-
-### auditLogger.js
-
-```javascript
-const { BlobServiceClient } = require('@azure/storage-blob');
-
-async function logAudit(entry) {
-  const blobClient = BlobServiceClient.fromConnectionString(process.env.AUDIT_STORAGE);
-  const container = blobClient.getContainerClient('audit-logs');
-  const blobName = `${entry.invoiceId}-${Date.now()}.json`;
-  const blockBlob = container.getBlockBlobClient(blobName);
-  await blockBlob.upload(JSON.stringify(entry), Buffer.byteLength(JSON.stringify(entry)));
-}
-
-module.exports = { logAudit };
-```
-
-### retryTracker.js
-```javascript
-function trackRetry(context) {
-  const count = context.retryContext?.retryCount || 0;
-  return { count };
-}
-
-module.exports = { trackRetry };
-```
-
-### Bindings: function.json
-
-```json
-{
-  "bindings": [
-    {
-      "name": "invoiceBlob",
-      "type": "blobTrigger",
-      "direction": "in",
-      "path": "invoices/{name}",
-      "connection": "AzureWebJobsStorage"
-    },
-    {
-      "name": "outputQueue",
-      "type": "queue",
-      "direction": "out",
-      "queueName": "validated-invoices",
-      "connection": "AzureWebJobsStorage"
-    }
-  ]
-}
-```
 ---
-
-### Step 1: Prerequisites
-
-Make sure you have installed:
-
-1. Node.js (LTS recommended)
-
-2. Azure Functions Core Tools (npm install -g azure-functions-core-tools@4 --unsafe-perm true)
-
-3. Azure CLI (for deployment)
-
-4. Optional: VS Code with Azure Functions extension
-
-Check installation:
-
-  node -v
-  func --version
-  az --version
-
-### Step 2: Create a New Function App
-
-# Create project folder
-mkdir MyFunctionApp
-cd MyFunctionApp
-
-# Initialize function app
-func init . --worker-runtime node --language javascript
-
-  --worker-runtime node → Node.js runtime
-  
-  --language javascript → JS function (use --language typescript for TypeScript)
-
-### Step 3: Add a New Function
-
-# Add HTTP-triggered function
-
-   func new
-
-
-You will see a prompt:
+##
 
 ```
-Select a template: 
-1. HttpTrigger
-2. TimerTrigger
-...
-```
 
-Choose HttpTrigger → give it a name (e.g., HelloFunction) → Authorization level (Anonymous for public access, Function for key-protected).
-
-### Step 4: Function Code Example
-
-Inside fetchTokenHttpTrigger.js:
-
-```
-const { app } = require('@azure/functions');
+import { app } from '@azure/functions';
 
 app.http('fetchTokenHttpTrigger', {
-    methods: ['GET', 'POST'],
+    methods: ['POST'],
     authLevel: 'anonymous',
     handler: async (request, context) => {
-        context.log(`Http function processed request for url "${request.url}"`);
+        try {
+            const requestBodyTxt = await request.text();
+            context.log("requestBodyTxt : " + requestBodyTxt);
 
-        const name = request.query.get('name') || await request.text() || 'world';
-
-        return { body: `Hello, ${name}!` };
+            let responseObj = {};
+            responseObj.message = "successfully uploaded";
+            return {
+                status: 201,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(responseObj),
+            };
+        } catch (error) {
+            context.log(`Error: ${error}`);
+            return {
+                status: 500,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(error),
+            };
+        }
     }
 });
 
 ```
-
-### Step 5: Run Locally
-
-   func start
-
-Open browser → http://localhost:7071/api/HelloFunction?name=John
-
-You should see:
-
-   Hello, John!
-
-### Step 6: Deploy to Azure
-
-Login to Azure:
-
-  az login
-
-Create a Function App in Azure:
-
-# Variables
-RESOURCE_GROUP=myResourceGroup
-FUNCTION_APP_NAME=myfuncapp12345
-STORAGE_ACCOUNT=mystorageacct12345
-LOCATION=CentralIndia
-
-# Create resource group
-az group create --name $RESOURCE_GROUP --location $LOCATION
-
-# Create storage account
-az storage account create --name $STORAGE_ACCOUNT --location $LOCATION --resource-group $RESOURCE_GROUP --sku Standard_LRS
-
-# Create function app
-az functionapp create --resource-group $RESOURCE_GROUP --consumption-plan-location $LOCATION --runtime node --runtime-version 18 --functions-version 4 --name $FUNCTION_APP_NAME --storage-account $STORAGE_ACCOUNT
-
-
-Deploy your function:
-
-  func azure functionapp publish $FUNCTION_APP_NAME
-
-Get your function URL:
-
-az functionapp function show --function-name HelloFunction --name $FUNCTION_APP_NAME --resource-group $RESOURCE_GROUP
-
-
-Your HTTP-triggered Azure Function is live!
-
----
-
-Next steps:
-
-Test the function locally with a POST request, for example using curl or Postman:
-
-```
-curl -X POST http://localhost:7071/api/fetchToken \
-     -H "Content-Type: application/json" \
-     -d '{"code":"<AUTH_CODE>","appName":"app1"}'
-```
-
-or with a refresh token:
-
-```
-curl -X POST http://localhost:7071/api/fetchToken \
-     -H "Content-Type: application/json" \
-     -d '{"refreshToken":"<REFRESH_TOKEN>","appName":"app1"}'
-```
-
-Check the logs in your terminal to confirm token requests are hitting the function and responses are returned.
-
-Once verified locally, you can deploy to Azure.
-
----
-
-Prerequisites
-
-Before we start:
-
-- Azure Functions Core Tools v4 (func --version)
-
-- Node.js ≥ 20
-
-- Azure Service Bus namespace + connection string
-  (from Azure Portal → Service Bus → Shared access policies → RootManageSharedAccessKey → Connection string)
-
-### Step 1: Create a new function project
-
-mkdir sb-trigger-func
-cd sb-trigger-func
-
-func init --worker-runtime node --language javascript
-
-
-This generates a Node.js function app with a host.json, local.settings.json, etc.
-
-Step 2: Add a Service Bus–triggered function
-func new --template "Service Bus Queue trigger" --name processServiceBusMessage
-
-
-✅ This creates:
-
-processServiceBusMessage/
-  function.json
-  index.js
-
-⚙️ Step 3: Edit processServiceBusMessage/function.json
-
-Make sure it looks like this:
-
-{
-  "bindings": [
-    {
-      "name": "message",
-      "type": "serviceBusTrigger",
-      "direction": "in",
-      "queueName": "my-queue-name",
-      "connection": "SERVICEBUS_CONNECTION"
-    }
-  ]
-}
-
-
-If you want a topic + subscription instead, use:
-
-{
-  "bindings": [
-    {
-      "name": "message",
-      "type": "serviceBusTrigger",
-      "direction": "in",
-      "topicName": "my-topic-name",
-      "subscriptionName": "my-subscription",
-      "connection": "SERVICEBUS_CONNECTION"
-    }
-  ]
-}
-
-💻 Step 4: Edit index.js (ES6 syntax)
-import { app } from '@azure/functions';
-
-export async function processServiceBusMessage(message, context) {
-  context.log(`📥 Received message from Service Bus:`, message);
-
-  try {
-    // Example: handle JSON payloads safely
-    const data = typeof message === 'string' ? JSON.parse(message) : message;
-    context.log(`Processed data:`, data);
-  } catch (err) {
-    context.log.error('Failed to process message:', err);
-  }
-}
-
-
-(If you’re not using "type": "module" in package.json yet, rename file to .cjs or switch to module.exports = async function(...) {}.)
-
-⚙️ Step 5: Configure local.settings.json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "node",
-    "SERVICEBUS_CONNECTION": "<your Service Bus connection string>"
-  }
-}
-
-
-⚠️ Replace <your Service Bus connection string> with the real value from the Azure portal.
-
-🧪 Step 6: Start locally
-func start
-
-
-You’ll see:
-
-Functions:
-
-    processServiceBusMessage: serviceBusTrigger
-
-
-When a message arrives in my-queue-name, your function will run automatically and log the payload.
-
-☁️ Step 7: Deploy to Azure
-func azure functionapp publish <your-function-app-name>
