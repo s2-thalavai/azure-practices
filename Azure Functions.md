@@ -125,7 +125,6 @@ These functions **automatically scale** and only **consume resources while runni
 
 - Emit result to downstream queue or storage
 
----
 ##
 
 ```
