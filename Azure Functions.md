@@ -377,3 +377,112 @@ Once verified locally, you can deploy to Azure.
 
 ---
 
+Prerequisites
+
+Before we start:
+
+- Azure Functions Core Tools v4 (func --version)
+
+- Node.js ≥ 20
+
+- Azure Service Bus namespace + connection string
+  (from Azure Portal → Service Bus → Shared access policies → RootManageSharedAccessKey → Connection string)
+
+### Step 1: Create a new function project
+
+mkdir sb-trigger-func
+cd sb-trigger-func
+
+func init --worker-runtime node --language javascript
+
+
+This generates a Node.js function app with a host.json, local.settings.json, etc.
+
+Step 2: Add a Service Bus–triggered function
+func new --template "Service Bus Queue trigger" --name processServiceBusMessage
+
+
+✅ This creates:
+
+processServiceBusMessage/
+  function.json
+  index.js
+
+⚙️ Step 3: Edit processServiceBusMessage/function.json
+
+Make sure it looks like this:
+
+{
+  "bindings": [
+    {
+      "name": "message",
+      "type": "serviceBusTrigger",
+      "direction": "in",
+      "queueName": "my-queue-name",
+      "connection": "SERVICEBUS_CONNECTION"
+    }
+  ]
+}
+
+
+If you want a topic + subscription instead, use:
+
+{
+  "bindings": [
+    {
+      "name": "message",
+      "type": "serviceBusTrigger",
+      "direction": "in",
+      "topicName": "my-topic-name",
+      "subscriptionName": "my-subscription",
+      "connection": "SERVICEBUS_CONNECTION"
+    }
+  ]
+}
+
+💻 Step 4: Edit index.js (ES6 syntax)
+import { app } from '@azure/functions';
+
+export async function processServiceBusMessage(message, context) {
+  context.log(`📥 Received message from Service Bus:`, message);
+
+  try {
+    // Example: handle JSON payloads safely
+    const data = typeof message === 'string' ? JSON.parse(message) : message;
+    context.log(`Processed data:`, data);
+  } catch (err) {
+    context.log.error('Failed to process message:', err);
+  }
+}
+
+
+(If you’re not using "type": "module" in package.json yet, rename file to .cjs or switch to module.exports = async function(...) {}.)
+
+⚙️ Step 5: Configure local.settings.json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "SERVICEBUS_CONNECTION": "<your Service Bus connection string>"
+  }
+}
+
+
+⚠️ Replace <your Service Bus connection string> with the real value from the Azure portal.
+
+🧪 Step 6: Start locally
+func start
+
+
+You’ll see:
+
+Functions:
+
+    processServiceBusMessage: serviceBusTrigger
+
+
+When a message arrives in my-queue-name, your function will run automatically and log the payload.
+
+☁️ Step 7: Deploy to Azure
+func azure functionapp publish <your-function-app-name>
