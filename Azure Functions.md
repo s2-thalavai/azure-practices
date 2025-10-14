@@ -352,3 +352,28 @@ az functionapp function show --function-name HelloFunction --name $FUNCTION_APP_
 Your HTTP-triggered Azure Function is live!
 
 ---
+
+Next steps:
+
+Test the function locally with a POST request, for example using curl or Postman:
+
+```
+curl -X POST http://localhost:7071/api/fetchToken \
+     -H "Content-Type: application/json" \
+     -d '{"code":"<AUTH_CODE>","appName":"app1"}'
+```
+
+or with a refresh token:
+
+```
+curl -X POST http://localhost:7071/api/fetchToken \
+     -H "Content-Type: application/json" \
+     -d '{"refreshToken":"<REFRESH_TOKEN>","appName":"app1"}'
+```
+
+Check the logs in your terminal to confirm token requests are hitting the function and responses are returned.
+
+Once verified locally, you can deploy to Azure.
+
+---
+
