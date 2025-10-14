@@ -132,34 +132,20 @@ These functions **automatically scale** and only **consume resources while runni
 
 import { app } from '@azure/functions';
 
-app.http('fetchTokenHttpTrigger', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: async (request, context) => {
-        try {
-            const requestBodyTxt = await request.text();
-            context.log("requestBodyTxt : " + requestBodyTxt);
-
-            let responseObj = {};
-            responseObj.message = "successfully uploaded";
-            return {
-                status: 201,
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(responseObj),
-            };
-        } catch (error) {
-            context.log(`Error: ${error}`);
-            return {
-                status: 500,
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(error),
-            };
-        }
-    }
-});
+export async function helloHttp(request, context) {
+   context.log('Processing request...');
+   const name = request.query.get('name') || (await request.text());
+ 
+   return {
+     status: 200,
+     body: `Hello, ${name || 'world'}!`
+   };
+ }
+  
+ app.http('helloHttp', {
+   methods: ['GET', 'POST'],
+   authLevel: 'anonymous',
+   handler: helloHttp
+ });
 
 ```
