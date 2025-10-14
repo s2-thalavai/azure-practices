@@ -127,24 +127,32 @@ These functions **automatically scale** and only **consume resources while runni
 
 ##
 
+## Hello World
+
 ```
 
 import { app } from '@azure/functions';
 
 export async function helloHttp(request, context) {
-   context.log('Processing request...');
-   const name = request.query.get('name') || (await request.text());
- 
-   return {
-     status: 200,
-     body: `Hello, ${name || 'world'}!`
-   };
- }
+    context.log('Processing request...');
+    const name = request.query.get('name') || (await request.text());
   
- app.http('helloHttp', {
-   methods: ['GET', 'POST'],
-   authLevel: 'anonymous',
-   handler: helloHttp
- });
-
+    return {
+      status: 200,
+      body: `Hello, ${name || 'world'}!`
+    };
+  }
+  
+  app.http('helloHttp', {
+    methods: ['GET', 'POST'],
+    authLevel: 'anonymous',
+    handler: helloHttp
+  });
+  
 ```
+
+Then hit:
+
+    http://localhost:7071/api/helloHttp?name=Siva
+
+ 
