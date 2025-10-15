@@ -156,3 +156,12 @@ Then hit:
     http://localhost:7071/api/helloHttp?name=Siva
 
  
+## Key Improvements:
+
+- Structured Logging — context.log.error() makes it easier to spot errors in Application Insights.
+
+- Axios-Specific Error Details — If you’re using axios, error.response?.data and error.response?.status help diagnose remote API failures.
+
+- JSON Response — Azure Functions return objects automatically serialized, but specifying Content-Type ensures clarity.
+
+- Avoid Leaking Sensitive Info — You only expose error.message, not full internals or tokens.
