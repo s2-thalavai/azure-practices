@@ -1,0 +1,248 @@
+# Azure Monitor setup
+
+step-by-step and design a complete Azure Monitor setup to collect logs, metrics, and events from:
+
+1. Private AKS (Azure Kubernetes Service)
+2. Azure Functions (Public + Private / VNet-integrated)
+3. Azure Static Web Apps
+
+We’ll cover both the conceptual architecture and the implementation steps, so you can apply it directly in production.
+
+## 1. Conceptual Overview: Azure Monitor Data Flow
+
+Azure Monitor is the umbrella for collecting:
+
+- Metrics → numeric time-series data (CPU %, memory, request count)
+
+- Logs → structured/unstructured telemetry (application logs, traces, events)
+
+- Events → platform or resource-level diagnostics (e.g., function execution, container restart)
+
+All these data sources are sent to:
+
+- Log Analytics Workspace (for querying & correlation)
+
+- Azure Monitor Metrics (for visual dashboards & alerts)
+
+- Optional: Event Hub / Storage / SIEM (for downstream ingestion)
+
+## 2. Centralized Architecture (2025 Best Practice)
+
+```scss
+
+                        ┌──────────────────────────────┐
+                        │ Azure Monitor (Unified View) │
+                        └─────────────┬────────────────┘
+                                      │
+               ┌──────────────────────┴──────────────────────┐
+               │                                             │
+       Log Analytics Workspace                       Azure Metrics DB
+               │                                             │
+ ┌─────────────┼────────────┬──────────────┐       ┌─────────┼───────────┐
+ │             │            │              │       │         │           │
+ │   AKS (Private)  Azure Functions  Azure Static Web Apps   Platform Events │
+ │   (Container logs, Metrics) (App Logs, Invocations) (Access Logs, Errors) │
+ └─────────────┴────────────┴──────────────┴───────────────────────────────┘
+
+```
+
+## 3. Private AKS Cluster Integration
+
+For a private AKS cluster, you’ll need network-aware integration to allow Azure Monitor agents to send data securely.
+
+### 3.1 Enable Container Insights:
+
+```bash
+
+az aks enable-addons \
+    --addons monitoring \
+    --name myPrivateAKS \
+    --resource-group myRG \
+    --workspace-resource-id "/subscriptions/<sub-id>/resourceGroups/myRG/providers/Microsoft.OperationalInsights/workspaces/myLAW"
+
+```
+
+## 3.2. Private Network Access:
+
+If AKS is in a private VNet, ensure outbound to Azure Monitor endpoints via:
+
+- Private Link for Azure Monitor
+
+- OR Private DNS Zones like:
+
+```
+privatelink.monitor.azure.com
+privatelink.ods.opinsights.azure.com
+privatelink.oms.opinsights.azure.com
+```
+
+- If using Azure Monitor Agent (AMA), configure via Data Collection Rules (DCR).
+
+## 3.3. What gets collected:
+
+- Container logs
+
+- Pod/Node metrics
+
+- Control plane events
+
+- Kube audit logs (optional via Diagnostic settings)
+
+## 3.4. Verify collection:
+
+```bash
+az monitor log-analytics query \
+    --workspace "<workspace-id>" \
+    --query "ContainerLog | take 10"
+```
+
+# 4. Azure Functions (Public + Private)
+
+Azure Functions produce invocation logs, application insights telemetry, and platform metrics.
+
+**a. Public Functions (default)**
+
+- Go to your Function App → Monitoring → Diagnostic settings
+
+- Send to:
+
+    - Log Analytics Workspace
+    
+    - Event Hub (optional)
+    
+    - Storage Account (optional)
+
+  Configure categories:
+
+
+```nginx
+    FunctionAppLogs
+    AppServiceHTTPLogs
+    AppServiceConsoleLogs
+    AppServicePlatformLogs
+```
+**b. Private Functions (VNet integrated)**
+
+If your Function App uses private endpoints:
+
+- Enable Private Link for Azure Monitor ingestion
+
+    - privatelink.monitor.azure.com
+    
+    - privatelink.ods.opinsights.azure.com
+
+- Ensure outbound NSG rules allow:
+
+    - TCP 443 to the above private endpoints.
+
+- Use Managed Identity for agent auth (no key needed).
+
+**c. Application Insights Integration**
+
+You can also send structured telemetry:
+
+# Example for Python Function
+
+```python
+from opencensus.ext.azure.log_exporter import AzureLogHandler
+import logging
+
+logger = logging.getLogger(__name__)
+logger.addHandler(AzureLogHandler(
+    connection_string='InstrumentationKey=<app-insights-key>'
+))
+logger.warning("Azure Function executed successfully")
+```
+
+# 5. Azure Static Web Apps Integration
+
+Azure Static Web Apps are serverless, but you can still get diagnostic logs and front-end performance metrics.
+
+Options:
+
+**1. Diagnostic Settings → Log Analytics**
+
+- Go to your Static Web App → Monitoring → Diagnostic settings.
+
+- Enable:
+
+    ```nginx
+    StaticWebAppsLogs
+    StaticWebAppsConsoleLogs
+    StaticWebAppsRequests
+    ```
+- Destination: Log Analytics Workspace.
+
+**2. Front-end telemetry via Application Insights (Client-side)**
+
+  ```js
+  // appinsights.js
+  import { ApplicationInsights } from '@microsoft/applicationinsights-web';
+  const appInsights = new ApplicationInsights({
+    config: {
+      connectionString: 'InstrumentationKey=<app-insights-key>',
+    },
+  });
+  appInsights.loadAppInsights();
+  appInsights.trackPageView();
+  ```
+
+3. Private Endpoint (Optional)
+
+If your Static Web App connects to backend APIs (in VNet), ensure network rules allow telemetry export via Monitor Private Link.
+
+# 6. Centralized Correlation
+
+All the above services can be configured to send data to the same Log Analytics Workspace, enabling cross-service queries like:
+
+```kusto
+union ContainerLog, AppTraces, StaticWebAppsLogs
+| where TimeGenerated > ago(1h)
+| summarize count() by SourceSystem, bin(TimeGenerated, 5m)
+```
+
+This gives a unified operational view across AKS, Functions, and Static Web Apps.
+
+# 7. Dashboards & Alerts
+
+- Dashboards:
+- 
+Build unified dashboards in Azure Monitor Workbooks with charts for:
+
+  - Pod CPU/Memory (AKS)
+  
+  - Function latency/invocation failures
+  
+  - Static Web response times
+
+- Alerts:
+
+    Create alerts based on metrics or log queries:
+
+```bash
+az monitor metrics alert create \
+    --name "High CPU on AKS" \
+    --resource-group myRG \
+    --scopes /subscriptions/<sub>/resourceGroups/myRG/providers/Microsoft.ContainerService/managedClusters/myAKS \
+    --condition "avg(ContainerCpuUsagePercentage) > 80"
+```
+
+# 8. Security & Governance
+
+✅ Use Private Link for all Monitor endpoints in private VNets.
+
+✅ Use Managed Identities for all agent authentication.
+
+✅ Set Retention Policy in Log Analytics (30–90 days typical).
+
+✅ Enforce via Azure Policy for consistent diagnostic settings.
+
+
+# Summary Matrix
+
+| Azure Service       | Data Source Type | Integration Method                 | Supports Private Endpoint | Destination                  |
+| ------------------- | ---------------- | ---------------------------------- | ------------------------- | ---------------------------- |
+| **AKS (Private)**   | Logs + Metrics   | Container Insights / AMA + DCR     | ✅ Yes                     | Log Analytics                |
+| **Azure Functions** | Logs + Metrics   | Diagnostic Settings + App Insights | ✅ Yes                     | Log Analytics / App Insights |
+| **Static Web Apps** | Logs + Frontend  | Diagnostic Settings + JS SDK       | ⚙️ Partial (backend only) | Log Analytics / App Insights |
+
