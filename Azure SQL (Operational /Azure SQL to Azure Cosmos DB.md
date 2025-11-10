@@ -198,3 +198,151 @@ You **project domain events** into Cosmos as **read models**.
 
 ----------
 
+
+Here is a **clean, enterprise-grade explanation** of:
+
+✅ **Outbox Pattern**  
+✅ **Transactional Event Emitters**
+
+…and WHEN/WHY to use each **to reliably publish events from Azure SQL → Azure Service Bus → Cosmos Read Models**.
+
+----------
+
+# ✅ **1. Outbox Pattern (Recommended for Microservices with SQL)**
+
+This is the **gold standard** for reliable event publishing whenever your service uses a relational database (Azure SQL).  
+It ensures **exactly-once**, **transactionally consistent** event emission.
+
+----------
+
+## ✅ **How the Outbox Pattern Works**
+
+### **Step 1 — Write SQL change + Outbox record in SAME transaction**
+
+`BEGIN TRANSACTION; UPDATE Vendor SET status =  'VALIDATED'  WHERE id =  123; INSERT  INTO Outbox (id, eventType, payload, createdAt) VALUES ('evt-789', 'vendor.validated', '{...}', GETUTCDATE()); COMMIT;` 
+
+✅ Both SQL update **and** event record succeed or fail together.  
+❌ No partial state.  
+❌ No dropped events.
+
+----------
+
+### **Step 2 — Background Worker pulls outbox records**
+
+A small worker runs every few seconds:
+
+1.  Reads Outbox rows that are not sent
+    
+2.  Publishes them to Azure Service Bus
+    
+3.  Marks them as “sent” or deletes them
+    
+
+### Worker Example (Go / Java pseudocode)
+
+`for row := range outboxRepo.FetchUnsent() {
+    serviceBus.Publish(row.eventType, row.payload)
+    outboxRepo.MarkAsSent(row.id)
+}` 
+
+----------
+
+### ✅ Why Outbox Pattern is essential
+
+| Problem Without Outbox                           | Risk                        |
+| ------------------------------------------------ | --------------------------- |
+| DB updated but event not published               | ❌ Inconsistent read model   |
+| Event published but DB transaction failed        | ❌ Phantom events            |
+| Microservice crash between DB update and publish | ❌ Lost events               |
+| Azure SB transient failures                      | ❌ Partial workflow triggers |
+
+Outbox guarantees:
+
+✅ Exactly-once event emission
+✅ No double-publish
+✅ No race conditions
+✅ Read model stays consistent
+
+----------
+
+# ✅ **2. Transactional Event Emitters (Database + Broker in One Transaction)**
+
+This is used when:
+
+-   The database **and** message broker support the _same_ transaction
+    
+-   Example: PostgreSQL + Kafka with Kafka Connect
+    
+-   Or SQL Server with Service Broker
+    
+-   Or DynamoDB with Streams
+    
+
+Azure SQL **does NOT** support distributed messaging transactions with ASB.
+
+👉 **Therefore transactional emitters are NOT compatible with Azure SQL + Azure Service Bus.**
+
+Meaning:
+
+### ✅ **Outbox Pattern is mandatory**
+
+for Azure SQL → ASB → Cosmos architectures.
+
+----------
+
+# ✅ **Why Outbox is superior in Azure-Native EDA**
+
+| Pattern                      | Works with Azure SQL?       | Works with Azure Service Bus? | Reliability        |
+| ---------------------------- | --------------------------- | ----------------------------- | ------------------ |
+| Outbox                       | ✅ Yes                       | ✅ Yes                         | ✅ Highest          |
+| Transactional Emitters       | ❌ No (no XA / 2PC with ASB) | ❌ No                          | ❌ Not supported    |
+| Best-effort event publishing | ✅ Yes                       | ✅ Yes                         | ⚠️ Can lose events |
+
+
+Outbox is the **only** enterprise-safe option in this architecture.
+
+----------
+
+# ✅ Outbox → ASB → Cosmos Read Model (Correct Flow)
+
+```
+Azure SQL (Write Model)
+        |
+   Outbox Table |
+ Outbox Worker (Go/Java)
+        |
+ Azure Service Bus (Events)
+        | Read Model Projector
+        |
+ Azure Cosmos DB (Read Model)
+``` 
+
+✅ Strongly consistent workflow  
+✅ Event-driven projections  
+✅ No schema leaks  
+✅ No race conditions
+
+----------
+
+# ✅ Summary: What to Use?
+
+### ✅ You **must** use the Outbox Pattern
+
+Azure SQL + Azure Service Bus do **not** support distributed ACID transactions.
+
+### ✅ Transactional event emitters are **NOT available** in Azure SQL
+
+(no 2-phase commit with ASB).
+
+### ✅ Outbox ensures:
+
+-   Atomic DB write + event record
+    
+-   Guaranteed delivery
+    
+-   Idempotent projections
+    
+-   Robust read model consistency
+    
+
+----------
