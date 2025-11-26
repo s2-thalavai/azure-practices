@@ -308,6 +308,7 @@ az policy assignment create \
 Azure Policy **does not allow looping** (no foreach).  
 So required tags must be expressed as explicit conditions.
 
+-------------
 
 # 2. Create an Azure AD Conditional Access Policy
 
