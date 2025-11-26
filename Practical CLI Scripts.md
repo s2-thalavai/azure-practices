@@ -333,7 +333,7 @@ Example:
 
 # **3. Assignments**
 
-### **➡ Users**
+### ** Users**
 
 -   **Include:**
     
@@ -346,7 +346,7 @@ Example:
 
 ----------
 
-### **➡ Cloud Apps**
+### ** Cloud Apps**
 
 -   Select:  
     **Microsoft Azure Management**  
@@ -357,7 +357,7 @@ You can also choose **All cloud apps** if required.
 
 ----------
 
-### **➡ Conditions → Locations**
+### ** Conditions → Locations**
 
 -   **Include:**
     
@@ -374,14 +374,14 @@ This ensures the policy applies only from _untrusted_ locations.
 
 # **4. Access Controls**
 
-### **➡ Grant access → Require:**
+### ** Grant access → Require:**
 
--   **✔ Multi-factor authentication**
+-   ** Multi-factor authentication**
     
--   **✔ Require device to be marked as compliant** _(recommended)_  
+-   ** Require device to be marked as compliant** _(recommended)_  
     or
     
--   **✔ Require Hybrid Azure AD joined device / Require Azure AD joined device**
+-   ** Require Hybrid Azure AD joined device / Require Azure AD joined device**
     
 
 This satisfies:
