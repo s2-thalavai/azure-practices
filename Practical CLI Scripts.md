@@ -1,4 +1,4 @@
-# Azure CLI Script — Bulk Tag VMs by Department
+# 1. Azure CLI Script — Bulk Tag VMs by Department
 
 assign a tag like:
 
@@ -319,6 +319,117 @@ az policy assignment create \
 Azure Policy **does not allow looping** (no foreach).  
 So required tags must be expressed as explicit conditions.
 
-### 2. To extend beyond 4 tags
+-----
 
-Tell me the full list (e.g., “Need 12 tags”), and I’ll generate an expanded version.
+# 2. Create an Azure AD Conditional Access Policy
+
+Goal: Require Global Administrators to use MFA and an Azure AD–joined / compliant device when accessing Azure AD from untrusted locations.
+
+### **1. Go to Azure AD (Entra ID)**
+
+-   Open **Microsoft Entra admin center**
+    
+-   Navigate to:  
+    **Protection → Conditional Access → Create New Policy**
+    
+
+----------
+
+# **2. Name the policy**
+
+Example:  
+**"GA – Require MFA + Compliant Device from Untrusted Locations"**
+
+----------
+
+# **3. Assignments**
+
+### **➡ Users**
+
+-   **Include:**
+    
+    -   _Directory roles → Global Administrator_
+        
+-   **Exclude (optional but recommended):**
+    
+    -   Break-glass emergency account (if your org uses one)
+        
+
+----------
+
+### **➡ Cloud Apps**
+
+-   Select:  
+    **Microsoft Azure Management**  
+    (covers Azure Portal, ARM, CLI, PowerShell)
+    
+
+You can also choose **All cloud apps** if required.
+
+----------
+
+### **➡ Conditions → Locations**
+
+-   **Include:**
+    
+    -   **All locations**
+        
+-   **Exclude:**
+    
+    -   **Trusted locations** (Named locations → "Trusted Network" or IP ranges your org trusts)
+        
+
+This ensures the policy applies only from _untrusted_ locations.
+
+----------
+
+# **4. Access Controls**
+
+### **➡ Grant access → Require:**
+
+-   **✔ Multi-factor authentication**
+    
+-   **✔ Require device to be marked as compliant** _(recommended)_  
+    or
+    
+-   **✔ Require Hybrid Azure AD joined device / Require Azure AD joined device**
+    
+
+This satisfies:
+
+-   MFA required
+    
+-   Device trust requirement
+    
+
+**Important:** Selecting _Require all selected controls_ enforces both.
+
+----------
+
+# **5. Enable Policy**
+
+-   Set **Enable policy → On**
+    
+-   Save
+    
+
+----------
+
+# **Policy Summary**
+
+Your policy now enforces:
+
+-   Scope: **Global Administrators**
+    
+-   Condition: **If accessing from untrusted locations**
+    
+-   Controls enforced:
+    
+    -   MFA
+        
+    -   Azure AD–joined or compliant device
+        
+-   App context: Azure AD / Azure management
+
+------
+
