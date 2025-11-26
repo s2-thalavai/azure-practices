@@ -80,15 +80,11 @@ while IFS=',' read -r VM DEPT; do
 done < vm-tags.csv
 ```
 
-----
-
 ## **Azure Policy** that enforces a **Department** tag on all Virtual Machines.  
 
 1️. **Audit-only** (just check)  
 2️. **Deny** if missing  
 3️. **Auto-add default tag value** (recommended for governance)
-
-----------
 
 ## **1. Enforce: Deny VM creation/edit if Department tag is missing**
 
@@ -129,8 +125,6 @@ done < vm-tags.csv
 
 ```
 
-----------
-
 # **2. Audit: Show VMs missing Department tag**
 
 ```json
@@ -165,7 +159,6 @@ done < vm-tags.csv
 }
 
 ```
-----------
 
 # **3. Auto-add Missing Tag with a Default Value (Modify Policy)**
 
@@ -224,8 +217,6 @@ This will **automatically add** a Department tag if the user forgets it.
 
 > Note: The `roleDefinitionIds` includes **Tag Contributor**, required for Modify policies.
 
-----------
-
 ## Example (assign policy to RG1):
 
 ``` bash
@@ -234,8 +225,6 @@ az policy assignment create \
   --policy require-department-tag.json \
   --scope /subscriptions/<SUB-ID>/resourceGroups/RG1
 ```
-
------
 
 ## Azure Policy: Require Multiple Tags on All VMs (Deny if missing)
 
@@ -319,7 +308,7 @@ az policy assignment create \
 Azure Policy **does not allow looping** (no foreach).  
 So required tags must be expressed as explicit conditions.
 
------
+--------
 
 # 2. Create an Azure AD Conditional Access Policy
 
