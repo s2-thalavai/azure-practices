@@ -1,5 +1,13 @@
 # Azure CLI Script — Bulk Tag VMs by Department
 
+assign a tag like:
+
+Department = Finance
+Department = HR
+Department = IT
+
+can apply these via Portal, CLI, PowerShell, ARM/Bicep, Terraform, or Azure Policy.
+
 ## Option 1 — Apply the same department tag to all VMs
 
 ```bash
