@@ -48,7 +48,7 @@ done
 
 ### vm-tags.csv
 
-```
+```csv
 vm-name,department
 vm-fin-01,Finance
 vm-hr-01,HR
@@ -219,7 +219,7 @@ This will **automatically add** a Department tag if the user forgets it.
 
 ## Example (assign policy to RG1):
 
-```bash
+``` bash
 az policy assignment create \
   --name require-department-tag \
   --policy require-department-tag.json \
@@ -230,7 +230,7 @@ az policy assignment create \
 
 ## Azure Policy: Require Multiple Tags on All VMs (Deny if missing)
 
-```json
+``` json
 {
   "properties": {
     "displayName": "Require multiple tags on all Virtual Machines",
