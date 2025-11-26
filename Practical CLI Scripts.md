@@ -308,7 +308,6 @@ az policy assignment create \
 Azure Policy **does not allow looping** (no foreach).  
 So required tags must be expressed as explicit conditions.
 
---------
 
 # 2. Create an Azure AD Conditional Access Policy
 
@@ -322,14 +321,10 @@ Goal: Require Global Administrators to use MFA and an Azure AD–joined / compli
     **Protection → Conditional Access → Create New Policy**
     
 
-----------
-
 # **2. Name the policy**
 
 Example:  
 **"GA – Require MFA + Compliant Device from Untrusted Locations"**
-
-----------
 
 # **3. Assignments**
 
@@ -344,8 +339,6 @@ Example:
     -   Break-glass emergency account (if your org uses one)
         
 
-----------
-
 ### ** Cloud Apps**
 
 -   Select:  
@@ -354,8 +347,6 @@ Example:
     
 
 You can also choose **All cloud apps** if required.
-
-----------
 
 ### ** Conditions → Locations**
 
@@ -369,8 +360,6 @@ You can also choose **All cloud apps** if required.
         
 
 This ensures the policy applies only from _untrusted_ locations.
-
-----------
 
 # **4. Access Controls**
 
@@ -393,16 +382,12 @@ This satisfies:
 
 **Important:** Selecting _Require all selected controls_ enforces both.
 
-----------
-
 # **5. Enable Policy**
 
 -   Set **Enable policy → On**
     
 -   Save
     
-
-----------
 
 # **Policy Summary**
 
@@ -420,5 +405,4 @@ Your policy now enforces:
         
 -   App context: Azure AD / Azure management
 
-------
-
+--------
