@@ -1620,3 +1620,348 @@ This gives:
 
 --------
 
+For a SQL Server Always On availability group **listener** behind an **Azure Internal Load Balancer (ILB)**, you must configure a **TCP health probe**, **NOT an HTTP probe**.
+
+### Requirements for AG Listener in Azure:
+
+-   Use an **Internal Load Balancer (ILB)**
+    
+-   Configure a **TCP health probe**
+    
+-   Typical probe ports: **59999**, **59990**, or any unused custom TCP port
+    
+-   **NOT port 1433** (that’s the SQL endpoint)
+    
+-   **NOT HTTP** (AG listener does not respond to HTTP)
+    
+
+### Why the proposed solution fails:
+
+-   An **HTTP probe** looks for HTTP responses; SQL Always On availability groups do **not** return HTTP responses.
+    
+-   Therefore, the ILB would mark the SQL node as _unhealthy_.
+    
+-   And using port **1433** for the probe also doesn’t work because probes must use a **separate, dedicated TCP port**.
+    
+
+----------
+
+# Correct solution would be:
+
+Create a **TCP** health probe on a **custom port** (e.g., 59999) and configure the probe endpoint on each SQL node using:
+
+```powershell
+New-NetFirewallRule -DisplayName "ProbePort" `
+  -Direction Inbound `
+  -LocalPort 59999 `
+  -Protocol TCP `
+  -Action Allow
+```
+----------
+
+
+
+For configuring a **SQL Server Always On Availability Group Listener** behind an **Azure Internal Load Balancer (ILB)**, the required load balancer setting is:
+
+### ** Session persistence = None**
+
+This ensures that the ILB distributes traffic based on the ILB rule + probe result, allowing SQL connections to always route to the **current primary replica**.
+
+----------
+
+#  Why "Client IP" is incorrect
+
+Setting **Session persistence = Client IP** causes the load balancer to _pin_ a client’s traffic to a specific backend node.  
+But in a SQL Always On configuration:
+
+-   Only the **primary** replica should receive traffic
+    
+-   When failover occurs, the ILB must route traffic to the **new primary**
+    
+-   Sticky sessions (Client IP persistence) **break failover routing**
+    
+
+This leads to:
+
+-   Clients being stuck to the old server
+    
+-   Connection failures after failover
+    
+-   Incorrect listener behavior
+    
+
+Therefore, setting persistence to **Client IP does NOT meet the goal**.
+
+# Correct Load Balancer Settings for SQL AG Listener
+
+| Setting                                | Required                               |
+| -------------------------------------- | -------------------------------------- |
+| **LB Type**                            | Internal Load Balancer                 |
+| **Protocol**                           | TCP                                    |
+| **Health Probe**                       | TCP probe on custom port (e.g., 59999) |
+| **Session Persistence**                | **None**                               |
+| **Floating IP (Direct Server Return)** | **Enabled**                            |
+| **Backend Pool**                       | SQL AG nodes                           |
+
+
+# **Settings that will NOT work**
+
+-   HTTP health probe
+    
+-   Health probe on port 1433
+    
+-   Session persistence = **Client IP**
+    
+-   TCP probe missing or misconfigured
+    
+-   Floating IP = **Disabled**
+
+------
+
+
+Each Azure virtual machine needs at least **one network interface (NIC)** to connect to a virtual network subnet.
+
+For this question:
+
+### Requirements:
+
+-   Five VMs
+    
+-   Each VM needs:
+    
+    -   **1 private IP**
+        
+    -   **1 public IP**
+        
+-   Inbound/outbound **security rules must be identical** on all VMs
+    
+
+### Key Azure facts:
+
+-   A **NIC can have multiple IP configurations**:
+    
+    -   1 primary private IP
+        
+    -   Additional private IPs (optional)
+        
+    -   1 associated public IP (optional)
+        
+-   **Network Security Groups (NSGs)** can be applied to:
+    
+    -   the NIC, or
+        
+    -   the subnet
+        
+
+So for each VM:
+
+-   **1 NIC**
+    
+-   Add **one public IP** to the NIC
+    
+-   Attach the **same NSG** to all NICs (or the subnet)
+    
+
+No need for multiple NICs unless:
+
+-   You need multiple subnets
+    
+-   Or require traffic isolation per NIC (not required here)
+    
+
+Therefore:
+
+### ➤ **Five VMs × 1 NIC each = 5 NICs total**
+
+Public IPs are attached to the NIC, not separate NICs.
+
+You can create a single Network Security Group (NSG) with the required inbound and outbound rules and associate it to the subnet that contains the five VMs. All VMs in that subnet inherit the NSG rules, so one NSG is sufficient to enforce identical security for all VMs.
+
+-------
+
+Your company's Azure subscription includes Azure virtual machines (VMs) that run Windows Server 2016.
+One of the VMs is backed up every day using Azure Backup Instant Restore.
+When the VM becomes infected with data encrypting ransomware, you are required to restore the VM.
+Which of the following actions should you take?
+
+A. You should restore the VM after deleting the infected VM.
+B. You should restore the VM to any VM within the company's subscription.
+C. You should restore the VM to a new Azure VM. Most Voted
+D. You should restore the VM to an on-premise Windows device.
+
+
+This scenario is **not a file-level recovery** (like the previous question).  
+This time, the requirement is:
+
+> **“You are required to restore the VM.”**
+
+This refers to a **full VM restore**, not just recovering files.
+
+With Azure Backup:
+
+### 🔹 **When restoring a protected Azure VM, you have two supported options:**
+
+1.  **Restore the VM as a _new_ VM**
+    
+2.  **Restore disks only**, then create a VM manually
+    
+
+### 🔸 What you _cannot_ do:
+
+-   **You cannot overwrite the existing infected VM directly**  
+    Azure Backup **does not support in-place overwrite restore** for IaaS VMs.
+    
+
+Because the existing VM is infected with ransomware, the **safe and supported approach** is:
+
+✔ Restore as a **new Azure VM**  
+✔ Then delete the infected VM  
+✔ Reattach networking / reconfigure IPs as needed
+
+----------
+
+# Why other answers are incorrect
+
+### **A. Restore the VM after deleting the infected VM — Incorrect**
+
+Azure Backup does **not** restore _into_ the same old VM resource.  
+Restoring after deletion still creates a **new** VM internally.  
+So this answer is misleading.
+
+### **B. Restore the VM to any VM — Incorrect**
+
+That applies only to **file-level recovery**, not full VM recovery.
+
+### **D. Restore the VM to an on-premise Windows device — Incorrect**
+
+Azure VM restore cannot be restored directly on-prem; at best, disks can be downloaded manually, but that’s not a supported "VM restore."
+--------
+
+You are troubleshooting **performance issues** on Azure infrastructure (VMs, storage, networking, PaaS resources, etc.).  
+The tool designed specifically to collect, analyze, and visualize **performance metrics** is:
+
+## 🔹 **Azure Monitor**
+
+Azure Monitor provides:
+
+-   CPU / Memory / Disk metrics
+    
+-   Network throughput
+    
+-   Storage latency
+    
+-   App Insights telemetry
+    
+-   Log Analytics integration
+    
+-   Alerts based on metric conditions
+    
+
+This is exactly what you need to diagnose performance problems.
+
+----------
+
+# Why the other options are wrong
+
+### **A. Azure Traffic Analytics**
+
+-   Focuses on **NSG flow logs**, traffic patterns, and security analysis
+    
+-   Not about VM/storage/performance metrics
+    
+
+### **C. Azure Activity Log**
+
+-   Shows **control-plane operations** (resource creation, updates, access events)
+    
+-   Does **not** show performance metrics
+    
+
+### **D. Azure Advisor**
+
+-   Provides **recommendations** for cost, performance, HA, and security
+    
+-   Does _not_ show live performance metrics
+    
+-   Useful after analysis, not for root cause
+    
+
+----------
+
+
+To create **guest users** (B2B users) in Azure AD, you must **send an invitation**.  
+The correct cmdlet is:
+
+### **`New-AzureADMSInvitation`**
+
+This cmdlet:
+
+-   Creates a **guest account** (UserType = _Guest_)
+    
+-   Sends the invitation email
+    
+-   Sets up the external identity properly for B2B access
+
+-----
+
+
+# You have an Azure Active Directory (Azure AD) tenant named contoso.com. 
+
+You have a CSV file that contains the names and email addresses of 500 external users. You need to create a guest user account in contoso.com for each of the 500 external users. 
+
+Solution: You create a PowerShell script that runs the New-AzureADUser cmdlet for each user. Does this meet the goal?
+
+
+
+**PowerShell script** to bulk-invite 500 external users from a CSV file into Azure AD using **`New-AzureADMSInvitation`**.
+
+This is the _right_ method for creating **guest users** (B2B).
+
+----------
+
+# **CSV Format (example)**
+
+Save as **users.csv**:
+
+```
+Email,DisplayName
+bob@example.com,Bob Smith
+alice@partner.com,Alice P
+john@vendor.org,John Vendor
+``` 
+
+----------
+
+# **PowerShell Script (Works for Bulk Guest Invitations)**
+
+> Requires the **AzureAD** or **AzureADPreview** module.
+
+```
+# Connect to Azure AD
+Connect-AzureAD
+
+# Import the CSV
+$users = Import-Csv -Path "C:\temp\users.csv"
+
+foreach ($user in $users) {
+    New-AzureADMSInvitation `
+        -InvitedUserEmailAddress $user.Email `
+        -InvitedUserDisplayName $user.DisplayName `
+        -SendInvitationMessage $true `
+        -InviteRedirectUrl "https://myapps.microsoft.com"
+}
+``` 
+
+----------
+
+# **What this script does**
+
+-   Reads all rows from **users.csv**
+    
+-   Invites each external user
+    
+-   Creates a **Guest** account (UserType = _Guest_)
+    
+-   Sends them an invitation email
+    
+-   Redirects them to the MyApps portal after accepting
