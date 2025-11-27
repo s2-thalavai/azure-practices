@@ -407,3 +407,1007 @@ Your policy now enforces:
 -   App context: Azure AD / Azure management
 
 --------
+
+# Use an ARM template to deploy VMs while ensuring the admin password is NOT stored in plain text.
+
+To achieve this, Azure requires TWO things:
+
+1. A secure place to store the password → Azure Key Vault
+2. A way for the ARM template/VM to read the secret → An access policy
+
+| **Answer Area**                                                 | **Correct Option**     |
+| --------------------------------------------------------------- | ---------------------- |
+| **Component to store the password securely**                    | **An Azure Key Vault** |
+| **Component to allow the ARM template/VM to read the password** | **An access policy**   |
+
+### **Azure Key Vault**
+
+-   Stores secrets (like passwords) securely
+    
+-   Prevents passwords from appearing in ARM templates
+    
+-   ARM templates reference Key Vault secrets using `"reference"` objects
+    
+
+### **Access Policy**
+
+-   Grants the ARM deployment identity permission to **Get** secrets from Key Vault
+    
+-   Without this, the ARM template cannot retrieve the password securely
+
+| Option                           | Why it’s wrong                                      |
+| -------------------------------- | --------------------------------------------------- |
+| **Azure Storage account**        | Can't store secrets securely for ARM templates      |
+| **Azure AD Identity Protection** | Used for risky sign-in analysis, not secret storage |
+| **Azure policy**                 | Enforces compliance; doesn’t store secrets          |
+| **Backup policy**                | Manages backup schedules; irrelevant                |
+
+
+**ARM template snippet** you need to securely reference an admin password stored in **Azure Key Vault**, using a **secureString parameter** and **Key Vault secret reference**.
+
+This is the _correct and secure_ way to avoid storing passwords in plain text.
+
+
+**production-ready ARM template** that deploys:
+
+### Azure Key Vault
+
+### A Secret stored securely in Key Vault
+
+### Access Policy allowing the VM's Managed Identity to read the secret
+
+### A VM (Windows Server) that uses that secret as its **admin password**
+
+This is a **single, combined ARM template**—no external resources required.
+
+----------
+
+# **COMPLETE ARM TEMPLATE: VM + Key Vault + Secret + Access Policy**
+
+> **Note:**  
+> The VM uses a **System-Assigned Managed Identity** to retrieve the password from Key Vault during deployment.
+
+```json
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": {
+      "type": "string",
+      "defaultValue": "myVM"
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser"
+    },
+    "adminPasswordValue": {
+      "type": "secureString",
+      "metadata": {
+        "description": "Password stored in Key Vault secret"
+      }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "defaultValue": "myKeyVault12345"
+    },
+    "secretName": {
+      "type": "string",
+      "defaultValue": "adminPassword"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "variables": {
+    "nicName": "[concat(parameters('vmName'), '-nic')]",
+    "vnetName": "[concat(parameters('vmName'), '-vnet')]",
+    "subnetName": "default",
+    "publicIPName": "[concat(parameters('vmName'), '-pip')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2022-07-01",
+      "name": "[parameters('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "tenantId": "[subscription().tenantId]",
+        "sku": {
+          "name": "standard",
+          "family": "A"
+        },
+        "accessPolicies": []
+      }
+    },
+
+    {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/{1}', parameters('keyVaultName'), parameters('secretName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+      ],
+      "properties": {
+        "value": "[parameters('adminPasswordValue')]"
+      }
+    },
+
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('publicIPName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic"
+      }
+    },
+
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.0.0.0/16"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('subnetName')]",
+            "properties": {
+              "addressPrefix": "10.0.1.0/24"
+            }
+          }
+        ]
+      }
+    },
+
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('nicName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnetName'))]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2021-07-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_DS1_v2"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2022-07-01', 'Full').secrets[parameters('secretName')].value]"
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "MicrosoftWindowsServer",
+            "offer": "WindowsServer",
+            "sku": "2019-Datacenter",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+            }
+          ]
+        }
+      }
+    },
+
+    {
+      "type": "Microsoft.KeyVault/vaults/accessPolicies",
+      "apiVersion": "2022-07-01",
+      "name": "[format('{0}/add', parameters('keyVaultName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "accessPolicies": [
+          {
+            "tenantId": "[subscription().tenantId]",
+            "objectId": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('vmName')), '2021-07-01', 'Full').identity.principalId]",
+            "permissions": {
+              "secrets": [
+                "get",
+                "list"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "vmId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+    }
+  }
+}
+
+```
+
+| Component                    | Purpose                                     |
+| ---------------------------- | ------------------------------------------- |
+| **Key Vault**                | Safely stores the admin password            |
+| **Secret**                   | Holds the encrypted password                |
+| **Access Policy**            | Grants the VM permission to read the secret |
+| **VM with Managed Identity** | Retrieves password securely                 |
+| **No plain text password**   | Fully secure deployment                     |
+
+------
+
+
+
+# **clean, modern, production-ready Bicep template** that deploys:
+
+ **Azure Key Vault**  
+ **A secret inside Key Vault**  
+ **Access policy granting the VM’s Managed Identity permission to read the secret**  
+ **A Windows VM that securely retrieves its admin password from Key Vault**  
+ **No plaintext passwords**
+
+This is the **combined end-to-end deployment**.
+
+# **FULL BICEP TEMPLATE — VM + Key Vault + Secret + Access Policy**
+
+```bicep
+param vmName string = 'myVM'
+param adminUsername string = 'azureuser'
+param adminPasswordValue securestring
+param keyVaultName string = 'myKeyVault12345'
+param secretName string = 'adminPassword'
+param location string = resourceGroup().location
+
+// Networking variables
+var vnetName = '${vmName}-vnet'
+var subnetName = 'default'
+var nicName = '${vmName}-nic'
+var pipName = '${vmName}-pip'
+
+// ---------------------------
+// Key Vault
+// ---------------------------
+resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    tenantId: subscription().tenantId
+    sku: {
+      name: 'standard'
+      family: 'A'
+    }
+    accessPolicies: []
+  }
+}
+
+// ---------------------------
+// Key Vault Secret
+// ---------------------------
+resource kvSecret 'Microsoft.KeyVault/vaults/secrets@2022-07-01' = {
+  name: '${keyVaultName}/${secretName}'
+  dependsOn: [
+    keyVault
+  ]
+  properties: {
+    value: adminPasswordValue
+  }
+}
+
+// ---------------------------
+// Public IP
+// ---------------------------
+resource publicIP 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+  name: pipName
+  location: location
+  properties: {
+    publicIPAllocationMethod: 'Dynamic'
+  }
+}
+
+// ---------------------------
+// VNet + Subnet
+// ---------------------------
+resource vnet 'Microsoft.Network/virtualNetworks@2021-05-01' = {
+  name: vnetName
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        '10.0.0.0/16'
+      ]
+    }
+    subnets: [
+      {
+        name: subnetName
+        properties: {
+          addressPrefix: '10.0.1.0/24'
+        }
+      }
+    ]
+  }
+}
+
+// ---------------------------
+// NIC
+// ---------------------------
+resource nic 'Microsoft.Network/networkInterfaces@2021-05-01' = {
+  name: nicName
+  location: location
+  dependsOn: [
+    publicIP
+    vnet
+  ]
+  properties: {
+    ipConfigurations: [
+      {
+        name: 'ipconfig1'
+        properties: {
+          subnet: {
+            id: vnet.properties.subnets[0].id
+          }
+          publicIPAddress: {
+            id: publicIP.id
+          }
+        }
+      }
+    ]
+  }
+}
+
+// ---------------------------
+// Virtual Machine with Managed Identity
+// ---------------------------
+resource vm 'Microsoft.Compute/virtualMachines@2021-07-01' = {
+  name: vmName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  dependsOn: [
+    nic
+  ]
+  properties: {
+    hardwareProfile: {
+      vmSize: 'Standard_DS1_v2'
+    }
+    osProfile: {
+      computerName: vmName
+      adminUsername: adminUsername
+      adminPassword: reference(keyVault.id, '2022-07-01', 'Full').secrets[secretName].value
+    }
+    storageProfile: {
+      imageReference: {
+        publisher: 'MicrosoftWindowsServer'
+        offer: 'WindowsServer'
+        sku: '2019-Datacenter'
+        version: 'latest'
+      }
+      osDisk: {
+        createOption: 'FromImage'
+      }
+    }
+    networkProfile: {
+      networkInterfaces: [
+        {
+          id: nic.id
+        }
+      ]
+    }
+  }
+}
+
+// ---------------------------
+// Grant Managed Identity access to Key Vault Secret
+// ---------------------------
+resource kvAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2022-07-01' = {
+  name: '${keyVaultName}/add'
+  dependsOn: [
+    vm
+    kvSecret
+  ]
+  properties: {
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: vm.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
+  }
+}
+
+// ---------------------------
+// Outputs
+// ---------------------------
+output vmId string = vm.id
+output keyVaultUri string = keyVault.properties.vaultUri
+output adminSecretName string = secretName
+
+```
+
+| Component               | Purpose                                |
+| ----------------------- | -------------------------------------- |
+| **Key Vault**           | Secure store for admin password        |
+| **Secret**              | Encrypted password stored in KV        |
+| **VM Managed Identity** | Authenticates to Key Vault             |
+| **Access policy**       | Grants MI secret-get permissions       |
+| **VM**                  | Pulls password securely from Key Vault |
+| **Networking**          | VNet, Subnet, NIC, Public IP           |
+
+-------
+
+# workflow to create a Managed Image from the uploaded VHD &
+# How to deploy multiple VMs from the custom image
+
+You have:
+
+-   A **generalized on-premises VM image** (Windows or Linux)
+    
+-   Likely exported as a **.vhd**
+    
+-   You need to **upload the VHD to Azure** so it can be used to create Azure VMs
+    
+
+The correct PowerShell cmdlet for uploading a **generalized VHD** from on-premises to Azure storage is:
+
+### **`Add-AzVhd`**
+
+This cmdlet:
+
+-   Uploads a local VHD file to an Azure storage account
+    
+-   Converts it if necessary
+    
+-   Prepares the VHD to be used as an Azure **OS image**
+    
+
+Example usage:
+
+```
+Add-AzVhd -LocalFilePath "C:\Images\myvm.vhd" `
+          -ResourceGroupName "RG1" `
+          -Destination "https://storageaccount.blob.core.windows.net/vhds/myvm.vhd"
+``` 
+
+**Notes:**
+
+-   The destination **must be a page blob**
+    
+-   The disk must be **VHD** format (not VHDX)
+  
+Once uploaded, you use the VHD to create an **Azure Managed Image** or a VM directly.
+
+Add-AzVM                Deploys a VM
+
+
+## Create a Managed Image from the uploaded VHD
+
+Use the New-AzImageConfig and New-AzImage cmdlets.
+
+``` powershell
+# Set variables
+$rg = "MyResourceGroup"
+$imageName = "MyCustomImage"
+$location = "eastus"
+$vhdUri = "https://<storageaccount>.blob.core.windows.net/vhds/MyCustomVM.vhd"
+
+# Create the image config
+$imageConfig = New-AzImageConfig `
+  -Location $location
+
+# Add OS disk from VHD
+$imageConfig = Set-AzImageOsDisk `
+  -Image $imageConfig `
+  -OsState Generalized `
+  -OsType Windows `
+  -BlobUri $vhdUri
+
+# Create the managed image
+New-AzImage `
+  -ImageName $imageName `
+  -ResourceGroupName $rg `
+  -Image $imageConfig
+```
+
+This creates a Managed Image in Azure.
+
+
+# **Create a VM from the Managed Image**
+
+``` powershell
+New-AzVM `
+  -ResourceGroupName $rg `
+  -Location $location `
+  -Name "MyVM01" `
+  -ImageName $imageName `
+  -VirtualNetworkName "MyVnet" `
+  -SubnetName "default" `
+  -SecurityGroupName "MyNSG" `
+  -PublicIpAddressName "MyPublicIP"
+
+``` 
+
+The VM will now:
+
+-   Use your **custom image**
+    
+-   Include all baked-in software configurations
+    
+-   Start in a generalized state (OOBE)
+
+--------
+
+# pipeline (Azure DevOps/GitHub Actions) to automate image creation
+
+Both pipelines:
+
+1. Build an image from a base OS  
+2. Run customization scripts  
+3. Output a **Managed Image** or **Shared Image Gallery (SIG)** image  
+4. Can upload your own VHD or use Marketplace images  
+5. Trigger on demand or on schedule
+
+
+# **Azure DevOps Pipeline (YAML)**
+
+## **azure-pipelines.yml**
+
+```yaml
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  location: 'eastus'
+  resourceGroup: 'AIB-RG'
+  imageTemplateName: 'MyAIBTemplate'
+  sigName: 'MyImageGallery'
+  sigImageName: 'MyCustomImage'
+  sigImageVersion: '1.0.0'
+
+steps:
+
+- task: AzureCLI@2
+  displayName: "Create RG if missing"
+  inputs:
+    azureSubscription: "My-Service-Connection"
+    scriptType: bash
+    scriptLocation: inlineScript: |
+      az group create -n $resourceGroup -l $location
+
+- task: AzureCLI@2
+  displayName: "Deploy Azure Image Builder Template"
+  inputs:
+    azureSubscription: "My-Service-Connection"
+    scriptType: bash
+    scriptLocation: inlineScript: |
+      az deployment group create \
+        --resource-group $resourceGroup \
+        --template-file aibTemplate.json \
+        --parameters \
+            imageTemplateName=$imageTemplateName \
+            location=$location \
+            sigName=$sigName \
+            sigImageName=$sigImageName \
+            sigImageVersion=$sigImageVersion
+
+- task: AzureCLI@2
+  displayName: "Start Image Build"
+  inputs:
+    azureSubscription: "My-Service-Connection"
+    scriptType: bash
+    scriptLocation: inlineScript: |
+      az image builder run \
+        --name $imageTemplateName \
+        --resource-group $resourceGroup
+```
+
+-------------------
+
+# **GitHub Actions Workflow**
+
+## **.github/workflows/build-image.yml**
+
+``` yaml
+name: Build Azure Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create/Update AIB Template
+      run: |
+        az group create -n AIB-RG -l eastus
+
+        az deployment group create \
+          --resource-group AIB-RG \
+          --template-file aibTemplate.json \
+          --parameters \
+            imageTemplateName=MyAIBTemplate \
+            location=eastus \
+            sigName=MyImageGallery \
+            sigImageName=MyCustomImage \
+            sigImageVersion=1.0.0
+
+    - name: Run AIB Build
+      run: |
+        az image builder run \
+          --resource-group AIB-RG \
+          --name MyAIBTemplate
+```
+
+
+# **A fully automated image creation pipeline**
+
+Your pipeline now:
+
+-   Builds from **Windows/Linux marketplace image**
+    
+-   Runs **PowerShell or Bash customization scripts**
+    
+-   Outputs a **Managed Image** or **Shared Image Gallery version**
+    
+-   Allows consistent VM deployment at scale
+    
+-   Is fully reusable and automatic
+
+------------------
+
+
+# **replicating an on-premises Hyper-V VM (VM1) to Azure using Azure Site Recovery (ASR).**
+
+When enabling ASR for **Hyper-V (without SCVMM)**, you **must create** the following objects:
+
+## **1. Azure Recovery Services Vault**
+
+This is required to store replication metadata and orchestrate failover.
+
+## **2. Hyper-V Site**
+
+Represents your on-premises Hyper-V host(s) and is required so ASR can recognize and communicate with your Hyper-V environment.
+
+## **3. Replication Policy**
+
+Defines replication frequency, retention, and recovery point settings.
+
+
+----------------
+
+# Your company has two Azure virtual networks:
+
+VNetA — has a VPN gateway
+
+VNetB — peered with VNetA
+
+Your on-prem network connects to VNetA using a site-to-site VPN.
+A Windows 10 computer connects to VNetA using a point-to-site VPN.
+
+On-premises devices can access VNetB, but the Windows 10 P2S client cannot access VNetB.
+
+You enable Allow gateway transit on VNetA.
+
+Does this fix the problem?
+
+A. Yes
+B. No
+
+## Enable allow gateway transit on VNetA (if not already):
+
+az network vnet peering update \
+  --resource-group RG \
+  --name PeeringFromAtoB \
+  --vnet-name VirtualNetworkA \
+  --allow-gateway-transit true
+
+
+## Enable use remote gateways on VNetB:
+
+az network vnet peering update \
+  --resource-group RG \
+  --name PeeringFromBtoA \
+  --vnet-name VirtualNetworkB \
+  --use-remote-gateways true
+
+
+After both settings are configured (and prerequisites met), the P2S client connected to VirtualNetworkA should be able to reach VirtualNetworkB.
+
+So the proposed single-step solution does not meet the goal.
+
+-----------------------
+
+#  two VPN types
+
+# **Site-to-Site VPN (S2S)**
+
+**Connects an entire on-premises network to an Azure virtual network.**
+
+### Think of it like:
+
+> **Office network ↔ Azure network**
+
+### Used for:
+
+-   Corporate offices connecting permanently to Azure
+    
+-   Branch offices connecting to central resources
+    
+-   Always-on connectivity
+    
+
+### Diagram:
+
+```On-Prem Network ────────(VPN Tunnel)──────── Azure VNet``` 
+
+----------
+
+# **Point-to-Site VPN (P2S)**
+
+**Connects a single device (like a laptop) directly to an Azure virtual network.**
+
+### Think of it like:
+
+> **Single computer ↔ Azure network**
+
+### Used for:
+
+-   Remote workers
+    
+-   Developers connecting from home
+    
+-   Admins testing connectivity
+    
+
+### Diagram:
+
+```Laptop/PC ────────(VPN Tunnel)──────── Azure VNet``` 
+
+----------
+
+# Side-by-Side Comparison
+
+| Feature         | Site-to-Site (S2S)     | Point-to-Site (P2S)          |
+| --------------- | ---------------------- | ---------------------------- |
+| Who connects?   | Whole on-prem network  | One device (PC/laptop)       |
+| Gateway needed? | Yes                    | Yes                          |
+| Always on?      | Yes                    | Optional (connect on demand) |
+| Use case        | Corporate connectivity | Remote user connectivity     |
+
+----------
+
+# A diagram combining S2S + P2S
+
+<img width="1024" height="454" alt="image" src="https://github.com/user-attachments/assets/c79ec8a3-fefc-424e-9e58-3828e0dc2162" />
+
+    <img width="2575" height="906" alt="image" src="https://github.com/user-attachments/assets/a2cf8558-7a5a-48a5-8fb9-84c65f056526" />
+
+-----
+
+#  Real-world architecture examples
+
+# **Hybrid Cloud Corporate Network (Most Common in Enterprises)**
+
+✔ Corporate network connected via **S2S VPN**  
+✔ Remote workers connected via **P2S VPN**  
+✔ Shared services in a **Hub VNet**  
+✔ Business apps in **Spoke VNets**
+
+![https://miro.medium.com/0%2ADxyjWIP-IAvGxsZJ.png](https://miro.medium.com/0%2ADxyjWIP-IAvGxsZJ.png)
+
+![https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png](https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png)
+
+![https://learn.microsoft.com/en-us/azure/virtual-wan/media/virtual-wan-about/virtualwanp2s.png](https://learn.microsoft.com/en-us/azure/virtual-wan/media/virtual-wan-about/virtualwanp2s.png)
+
+### How it works:
+
+-   **Hub VNet** contains:
+    
+    -   VPN Gateway (S2S + P2S)
+        
+    -   Firewall / NVA
+        
+    -   Bastion
+        
+-   **On-premises** connects to hub using S2S IPSec.
+    
+-   **Remote users** connect using P2S (cert or AAD auth).
+    
+-   **Workloads live in spoke VNets**, reachable via peering.
+    
+
+This architecture ensures:
+
+-   Centralized routing & security
+    
+-   Scalable networking
+    
+-   Segmentation between apps
+
+------
+
+# **Hybrid Cloud With Azure Firewall + Forced Tunneling**
+
+A common security-driven setup:
+
+![https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png](https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png)
+
+![https://journeyofthegeek.com/wp-content/uploads/2020/04/lab.gif?crop=1&h=476&w=594](https://journeyofthegeek.com/wp-content/uploads/2020/04/lab.gif?crop=1&h=476&w=594)
+
+![https://kodekloud.com/kk-media/image/upload/v1752882173/notes-assets/images/Microsoft-Azure-Security-Technologies-AZ-500-Explore-hub-and-spoke-topology/hub-and-spoke-azure-topology-diagram.jpg](https://kodekloud.com/kk-media/image/upload/v1752882173/notes-assets/images/Microsoft-Azure-Security-Technologies-AZ-500-Explore-hub-and-spoke-topology/hub-and-spoke-azure-topology-diagram.jpg)
+
+
+### Flow:
+
+-   All on-prem + P2S traffic enters **Hub Gateway**
+    
+-   Routes force traffic through **Azure Firewall**
+    
+-   Spokes cannot talk to each other unless firewall rules allow it
+    
+
+Ideal for:
+
+-   Zero trust segmentation
+    
+-   Secure enterprise workloads
+    
+-   PCI, HIPAA, NIST environments
+
+-----
+
+
+# **3. Branch Offices Connected With Multiple S2S VPNs**
+
+Large enterprises often have many branches connecting to Azure.
+
+![https://learn.microsoft.com/en-us/azure/vpn-gateway/media/vpn-gateway-about-point-to-site-routing/multiple-s2s.jpg](https://learn.microsoft.com/en-us/azure/vpn-gateway/media/vpn-gateway-about-point-to-site-routing/multiple-s2s.jpg)
+
+![https://learn.microsoft.com/en-us/azure/vpn-gateway/media/design/multi-site.png](https://learn.microsoft.com/en-us/azure/vpn-gateway/media/design/multi-site.png)
+
+![https://learn.microsoft.com/en-us/azure/vpn-gateway/media/vpn-gateway-connect-multiple-policybased-rm-ps/policybasedmultisite.png](https://learn.microsoft.com/en-us/azure/vpn-gateway/media/vpn-gateway-connect-multiple-policybased-rm-ps/policybasedmultisite.png)
+
+
+### Key points:
+
+-   Multiple branch offices → multiple S2S tunnels
+    
+-   All centralized through a **Hub VNet VPN Gateway**
+    
+-   P2S users can also connect using OpenVPN/Azure AD
+    
+
+Used in:
+
+-   Retail chains
+    
+-   Manufacturing plants
+    
+-   Global HQ + regional offices
+
+-------
+
+# **4. Multi-region DR with S2S + ASR + Peering**
+
+![https://learn.microsoft.com/en-us/azure/virtual-wan/media/disaster-recovery-design/multi-branch.png](https://learn.microsoft.com/en-us/azure/virtual-wan/media/disaster-recovery-design/multi-branch.png)
+
+![https://learn.microsoft.com/en-us/azure/route-server/media/multiregion/multiregion.png](https://learn.microsoft.com/en-us/azure/route-server/media/multiregion/multiregion.png)
+
+![https://miro.medium.com/v2/resize%3Afit%3A1400/0%2AWnc1Q-zzEbSVFyWI.png](https://miro.medium.com/v2/resize%3Afit%3A1400/0%2AWnc1Q-zzEbSVFyWI.png)
+
+4
+
+### Components:
+
+-   Region 1: Primary Hub (S2S + P2S)
+    
+-   Region 2: DR Hub
+    
+-   Azure Site Recovery (ASR) replicates VMs
+    
+-   Global peering between hubs
+    
+
+Used by:
+
+-   Healthcare
+    
+-   Financial institutions
+    
+-   Government workloads
+
+----
+
+
+# **5. DevOps / Developer Remote Access Platform**
+
+✔ Developers connect to P2S → Hub  
+✔ Dev/test workloads in spoke VNets  
+✔ Azure Bastion for secure RDP/SSH
+
+![https://learn-attachment.microsoft.com/api/attachments/6da6a936-d517-4161-9431-13c9601cecb2?platform=QnA](https://learn-attachment.microsoft.com/api/attachments/6da6a936-d517-4161-9431-13c9601cecb2?platform=QnA)
+
+![https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png](https://learn.microsoft.com/en-us/azure/architecture/networking/architecture/_images/hub-spoke.png)
+
+![https://learn.microsoft.com/en-us/azure/virtual-wan/media/virtual-wan-about/virtualwanp2s.png](https://learn.microsoft.com/en-us/azure/virtual-wan/media/virtual-wan-about/virtualwanp2s.png)
+
+------------
+
+# **6. High-security Architecture With No Inbound Ports**
+
+✔ P2S only  
+✔ No inbound S2S  
+✔ Azure AD authentication required  
+✔ All workloads reachable only from P2S clients or Bastion
+
+![https://media2.dev.to/dynamic/image/width%3D1000%2Cheight%3D500%2Cfit%3Dcover%2Cgravity%3Dauto%2Cformat%3Dauto/https%3A%2F%2Fdev-to-uploads.s3.amazonaws.com%2Fuploads%2Farticles%2F4x5abz0us2dgngwqaqa4.png](https://media2.dev.to/dynamic/image/width%3D1000%2Cheight%3D500%2Cfit%3Dcover%2Cgravity%3Dauto%2Cformat%3Dauto/https%3A%2F%2Fdev-to-uploads.s3.amazonaws.com%2Fuploads%2Farticles%2F4x5abz0us2dgngwqaqa4.png)
+
+![https://learn.microsoft.com/en-us/azure/vpn-gateway/media/point-to-site-about/p2s.png](https://learn.microsoft.com/en-us/azure/vpn-gateway/media/point-to-site-about/p2s.png)
+
+![https://learn.microsoft.com/en-us/azure/security/fundamentals/media/management/typical-management-network-topology.png](https://learn.microsoft.com/en-us/azure/security/fundamentals/media/management/typical-management-network-topology.png)
+
+4
+
+Used for:
+
+-   Dev/test environments
+    
+-   Sensitive workloads
+    
+-   Security-first SaaS platforms
+
+-----
