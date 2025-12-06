@@ -192,3 +192,19 @@ pipeline {
 ```
 
 ----------
+
+```bash
+az storage account show --name isappsdocustorageqa --resource-group Zone-RG --query networkRuleSet
+
+az storage account network-rule add --resource-group Zone-RG --account-name docustorageqa --ip-address 123.123.123.123
+
+
+az vm list-ip-addresses --name MLB-ISModernization --resource-group Zone-RG --query "[].virtualMachine.network.publicIpAddresses[].ipAddress" -o tsv
+
+az storage blob upload  --account-name "docustorageqa"  --container-name "platform-svc-fn-app-nonprod-build" --file "function-20251206060818/platform-services-fn-app.zip"  --name "platform-services-fn-app-20251206060818.zip" --sas-token "sp=" --overwrite
+
+az storage account update --resource-group Zone-RG --name docustorageqa --default-action Allow
+
+```
+
+----------
