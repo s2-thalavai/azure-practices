@@ -20,7 +20,7 @@ pipeline {
                     checkout scmGit(
                         branches: [[name: '*/${BRANCH_TO_BUILD}']],
                         userRemoteConfigs: [[
-                            credentialsId: 'is-apps-ssh-key',
+                            credentialsId: 'apps-ssh-key',
                             url: 'git@github.com:org/platform-services-fn-app.git'
                         ]]
                     )
@@ -47,12 +47,12 @@ pipeline {
             }
         }
 
-        stage('Publish Functions') {
+        stage('Publh Functions') {
             steps {
                 dir('platform-services-fn-app') {
                     powershell '''
                         npm install -g azure-functions-core-tools@4 --unsafe-perm true
-                        func azure functionapp publish $env:FUNCTION_APP --javascript --nozip
+                        func azure functionapp publh $env:FUNCTION_APP --javascript --nozip
                     '''
                 }
             }
@@ -69,24 +69,22 @@ pipeline {
 ## 
 
 ```groovy
+
 pipeline {
     agent any
-
     parameters {
-        string(name: 'BRANCH_TO_BUILD', defaultValue: 'Dev-branch', description: 'Git branch to build and deploy')
+        string(name: 'BRANCH_TO_BUILD', defaultValue: 'sprint-01-Dev', description: 'Git branch to build and deploy')
         string(name: 'FUNCTION_APP', defaultValue: 'platform-svc-fn-app-nonprod', description: 'Azure Function App name')
         string(name: 'ROLLBACK_BUILD', defaultValue: '', description: 'Optional: Jenkins build number to rollback to')
     }
-
     environment {
-        RESOURCE_GROUP    = "Zone-RG"
-        STORAGE_ACCOUNT   = "docustorageqa"
+        def timestamp = new Date().format("yyyyMMddHHmmss")
+        BUILD_NUMBER = "${timestamp}"
+        RESOURCE_GROUP = "Sandbox-Zone-RG"
+        STORAGE_ACCOUNT = "appsdocustorageqa"
         STORAGE_CONTAINER = "platform-svc-fn-app-nonprod-build"
-        FUNCTION_APP_ENV  = "${params.FUNCTION_APP}"
-        BRANCH_TO_BUILD_ENV = "${params.BRANCH_TO_BUILD}"
-        ROLLBACK_BUILD_ENV  = "${params.ROLLBACK_BUILD}"
+        FUNCTION_APP_ENV = "${params.FUNCTION_APP}"
     }
-
     stages {
         stage('Checkout Code') {
             steps {
@@ -94,14 +92,13 @@ pipeline {
                     checkout scmGit(
                         branches: [[name: "*/${params.BRANCH_TO_BUILD}"]],
                         userRemoteConfigs: [[
-                            credentialsId: 'is-apps-ssh-key',
+                            credentialsId: 'apps-ssh-key',
                             url: 'git@github.com:Marlabs-Innovations-Private-Limited/platform-services-fn-app.git'
                         ]]
                     )
                 }
             }
         }
-
         stage('Install Dependencies') {
             steps {
                 dir('platform-services-fn-app') {
@@ -109,83 +106,79 @@ pipeline {
                 }
             }
         }
-
         stage('Azure Login') {
             steps {
                 powershell '''
-                    az login --service-principal --username 1234-210129812-211212-1221 --password 1211221~12121212~11212 --tenant 1221121212
-                    az account set --subscription 12121221-212112-4e3c-12122-12121221
+                    az login --service-principal --username 123-19a6-4b48-b3ce-1221 --password 1212~111~11 --tenant 1221-11-11-11-94736facc3be
+                    az account set --subscription 111-11-11-11-111
                 '''
             }
         }
-
-        stage('Publish Functions') {
+        stage('Publh Functions') {
             when {
-                expression { return !params.ROLLBACK_BUILD?.trim() }
+                expression {
+                    return !params.ROLLBACK_BUILD?.trim()
+                }
             }
             steps {
                 dir('platform-services-fn-app') {
-                    powershell '''
+                    powershell """
                         npm install -g azure-functions-core-tools@4 --unsafe-perm true
-                        func azure functionapp publish $env:FUNCTION_APP_ENV --javascript --nozip
-                    '''
+        
+                        # Publh directly to Azure
+                        func azure functionapp publh ${env.FUNCTION_APP_ENV} --javascript --nozip
+        
+                        # Optionally copy local.settings.json for rollback/archive purposes
+                        Copy-Item "local.settings.json" "local.settings.json.bak" -Force
+        
+                        # Package deployment-ready ZIP with build number
+                        func pack --output "${env.WORKSPACE}\\platform-function-${env.BUILD_NUMBER}"
+                    """
                 }
             }
         }
-
-        stage('Archive Artifact') {
-            when {
-                expression { return !params.ROLLBACK_BUILD?.trim() }
+     stage('Archive and Upload in Parallel') {
+        parallel {       
+            stage('Archive Artifact') {
+                when {
+                    expression {
+                        return !params.ROLLBACK_BUILD?.trim()
+                    }
+                }
+                steps {
+                    archiveArtifacts artifacts: "platform-function-${env.BUILD_NUMBER}/platform-services-fn-app.zip", fingerprint: true
+                }
             }
-            steps {
-                archiveArtifacts artifacts: 'platform-services-fn-app/function.zip', fingerprint: true
-            }
-        }
-
-        stage('Upload to Blob Storage') {
-            when {
-                expression { return !params.ROLLBACK_BUILD?.trim() }
-            }
-            steps {
-                powershell '''
-                    $artifactName = "function-$env:BUILD_NUMBER.zip"
-                    az storage blob upload `
-                        --account-name $env:STORAGE_ACCOUNT `
-                        --container-name $env:STORAGE_CONTAINER `
-                        --file "$env:WORKSPACE\\platform-services-fn-app\\function.zip" `
-                        --name $artifactName `
-                        --overwrite
-                '''
-            }
-        }
-
-        stage('List Artifacts') {
-            steps {
-                powershell '''
-                    Write-Host "Available artifacts in $env:STORAGE_CONTAINER:"
-                    az storage blob list `
-                        --account-name $env:STORAGE_ACCOUNT `
-                        --container-name $env:STORAGE_CONTAINER `
-                        --output table
-                '''
-            }
-        }
-
-        stage('Rollback') {
-            when {
-                expression { return params.ROLLBACK_BUILD?.trim() }
-            }
-            steps {
-                powershell '''
-                    $artifactName = "function-$env:ROLLBACK_BUILD_ENV.zip"
-                    Write-Host "Rolling back to artifact: $artifactName"
-                    az functionapp deployment source config-zip `
-                        --resource-group $env:RESOURCE_GROUP `
-                        --name $env:FUNCTION_APP_ENV `
-                        --src "https://$env:STORAGE_ACCOUNT.blob.core.windows.net/$env:STORAGE_CONTAINER/$artifactName"
-                '''
+            
+            stage('Upload to Blob Storage') {
+                steps {
+                    script {
+                        def artifactName = "platform-function-${env.BUILD_NUMBER}/platform-services-fn-app.zip"
+                        def key = powershell(
+                            script: """
+                                az storage account keys lt `
+                                  --account-name appsdocustorageqa `
+                                  --resource-group Sandbox-Zone-RG `
+                                  --query "[0].value" -o tsv
+                            """,
+                            returnStdout: true
+                        ).trim()
+            
+                        powershell """
+                            az storage blob upload `
+                              --auth-mode key `
+                              --account-name ${env.STORAGE_ACCOUNT} `
+                              --container-name ${env.STORAGE_CONTAINER} `
+                              --file "${env.WORKSPACE}\\${artifactName}" `
+                              --name "${artifactName}" `
+                              --account-key ${key} `
+                              --overwrite
+                        """
+                    }
+                }
             }
         }
+     }
     }
 }
 
@@ -194,12 +187,12 @@ pipeline {
 ----------
 
 ```bash
-az storage account show --name isappsdocustorageqa --resource-group Zone-RG --query networkRuleSet
+az storage account show --name appsdocustorageqa --resource-group Zone-RG --query networkRuleSet
 
 az storage account network-rule add --resource-group Zone-RG --account-name docustorageqa --ip-address 123.123.123.123
 
 
-az vm list-ip-addresses --name MLB-ISModernization --resource-group Zone-RG --query "[].virtualMachine.network.publicIpAddresses[].ipAddress" -o tsv
+az vm lt-ip-addresses --name MLB-Modernization --resource-group Zone-RG --query "[].virtualMachine.network.publicIpAddresses[].ipAddress" -o tsv
 
 az storage blob upload  --account-name "docustorageqa"  --container-name "platform-svc-fn-app-nonprod-build" --file "function-20251206060818/platform-services-fn-app.zip"  --name "platform-services-fn-app-20251206060818.zip" --sas-token "sp=" --overwrite
 
