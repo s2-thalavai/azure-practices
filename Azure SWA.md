@@ -168,12 +168,34 @@ export class AppComponent {
 
 ### `staticwebapp.config.json`
 
-```json
+
+# **Fix 4 — Your app has route roles enforced**
+
+If your `staticwebapp.config.json` includes something like:
+
+`"allowedRoles":  ["authenticated"]` 
+
+or:
+
+`"allowedRoles":  ["admin"]` 
+
+That will block unauthenticated users.
+
+Change config to:
+
+``` json
 {
+  "routes": [
+    {
+      "route": "/*",
+      "allowedRoles": ["anonymous"]
+    }
+  ],
   "navigationFallback": {
     "rewrite": "/index.html"
   }
 }
 ```
-----------
+Deploy again.
 
+-----
