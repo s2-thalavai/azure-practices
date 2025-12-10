@@ -199,3 +199,5 @@ Change config to:
 Deploy again.
 
 -----
+
+## **2. Create React sample app (recommended way)**
