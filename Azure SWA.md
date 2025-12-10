@@ -1,4 +1,4 @@
-# Azure Static Web App
+# Azure Static Web App (Angular & React)
 
 ## **1. Create Angular sample app (recommended way)**
 
