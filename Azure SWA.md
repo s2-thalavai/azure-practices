@@ -204,5 +204,158 @@ Change config to:
 Deploy again.
 
 -----
+-----
 
 ## **2. Create React sample app (recommended way)**
+
+
+# **1. Create a new React app**
+
+Run:
+
+```bash
+npx create-react-app react-swa-sample cd react-swa-sample
+``` 
+
+----------
+
+----------
+
+# ✅ **2. Modify homepage text so you can verify deployment**
+
+Open:
+
+`src/App.js` 
+
+Replace content with:
+
+``` js
+function App() {
+  return (
+    <div style={{ textAlign: "center", marginTop: 40 }}>
+      <h1>✔ React app deployed to Azure Static Web Apps</h1>
+      <p>If you see this message, deployment worked!</p>
+    </div>
+  );
+}
+export default App;
+
+```
+
+----------
+
+----------
+
+# ✅ **3. Add Azure Static Web App config**
+
+Create a file:
+
+```staticwebapp.config.json``` 
+
+Content:
+
+``` json
+{
+  "routes": [
+    {
+      "route": "/*",
+      "rewrite": "/index.html"
+    }
+  ]
+}
+
+```
+
+📌 This ensures correct routing for SPA refresh / deep links.
+
+----------
+
+----------
+
+# ✅ **4. Build the app**
+
+`npm run build` 
+
+Output folder created:
+
+```css
+build/
+   index.html
+   static/
+   ...
+
+``` 
+
+----------
+
+----------
+
+# ✅ **5. Deploy to Azure Static Web Apps**
+
+You need the Azure SWA CLI installed:
+
+```bash
+npm install -g @azure/static-web-apps-cli
+``` 
+
+Now deploy:
+
+```bash
+swa deploy --app-location build
+``` 
+
+Azure will ask for deployment token if not provided.
+
+### You get this token from:
+
+Azure Portal → Static Web App → Deployment tokens → Copy token
+
+Run deploy with token:
+
+```bash
+swa deploy --app-location build --deployment-token <your-token>
+```
+
+----------
+
+----------
+
+# Your React app is live!
+
+The output will show URL like:
+
+`Project deployed to https://your-site-id.azurestaticapps.net 🚀` 
+
+
+## folder structure you deployed
+
+```css
+react-swa-sample/
+├── build/              ⇐ deployed folder
+├── src/
+├── public/
+├── staticwebapp.config.json
+├── package.json
+``` 
+
+----------
+
+----------
+
+## Extra Good Practices
+
+Force rebuild before deploy:
+
+```bash
+npm run build
+``` 
+
+If Jenkins or CI deploys it, ensure the config file is copied into `build` folder using script:
+
+e.g.,
+
+```bash
+cp staticwebapp.config.json build/
+``` 
+
+Each deploy should use the production `build` folder.
