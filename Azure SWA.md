@@ -80,6 +80,11 @@ dist/swa-angular-sample/
 
 ```bash
 swa deploy --app-location dist/swa-angular-sample
+
+or
+
+swa deploy --deployment-token 1234-12122121 --app-location dist/swa-angular-sample
+
 ``` 
 
 ----------
