@@ -60,6 +60,42 @@ Content:
 
  This ensures SPA routing works on Azure.
 
+## Frontdoor 
+
+```json
+{
+  "routes": [
+    {
+      "route": "/*",
+      "serve": "/index.html",
+      "statusCode": 200
+    }
+  ],
+
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "*.{css,scss,js,png,gif,ico,jpg,svg}"
+    ]
+  },
+
+  "networking": {
+    "allowedIpRanges": [
+      "AzureFrontDoor.Backend"
+    ]
+  },
+
+  "forwardingGateway": {
+    "requiredHeaders": {
+      "X-Azure-FDID": "123-456-4ba1-825f-ce6cc8170017"
+    },
+    "allowedForwardedHosts": [
+      "intranet-apps.abc.com"
+    ]
+  }
+}
+```
+
 ----------
 
 # **3. Build the app**
