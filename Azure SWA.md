@@ -90,7 +90,7 @@ Content:
       "X-Azure-FDID": "123-456-4ba1-825f-ce6cc8170017"
     },
     "allowedForwardedHosts": [
-      "intranet-apps.abc.com"
+      "intranet-apps.abc-companyt.com"
     ]
   }
 }
@@ -119,8 +119,7 @@ swa deploy --app-location dist/swa-angular-sample
 
 or
 
-swa deploy --deployment-token 1234-12122121 --app-location dist/swa-angular-sample
-
+swa deploy --app-location "dist/apps/sample" --env "production" --deployment-token "123-456-b890-48ca-90dc-890"
 ``` 
 
 ----------
@@ -468,207 +467,115 @@ Each deploy should use the production `build` folder.
 pipeline {
     agent any
 
-    /*****************************************
-     * PARAMETERS
-     *****************************************/
     parameters {
         choice(
             name: 'NODE_VERSION',
-            choices: ['14.21.3', '16.20.2', '18.18.2', '20.19.0'],
-            description: 'Select Node version for this build'
+            choices: ['16.20.2', '18.18.2'],
+            description: 'Node version'
         )
-
         string(
             name: 'BRANCH',
-            defaultValue: 'master',
-            description: 'Branch to checkout and build'
+            defaultValue: 'cs-sprint-13-test',
+            description: 'Git branch to build'
         )
+    }
+
+    environment {
+        DIST_ROOT   = "${WORKSPACE}/dist"
+        ENV_SRC     = "${WORKSPACE}/my-modernization-apps-deployment/booking-ui/dev"
+        ENV_DEST    = "${WORKSPACE}/apps/sample-ui/src/assets/environments"
+        DEPLOYMENT_TOKEN = "12344-21122121-b890-48ca-90dc-890"
     }
 
     stages {
 
-        /*****************************************
-         * CHECKOUT BOOKING-UI
-         *****************************************/
-        stage('Checkout booking-ui') {
+        /* ---------------------------------------------------------
+         * CHECKOUT SOURCE CODE
+         * --------------------------------------------------------- */
+        stage('Git Checkout') {
             steps {
                 checkout scmGit(
-                    branches: [[name: "*/${BRANCH}"]],
+                    branches: [[name: "*/${params.BRANCH}"]],
+                    extensions: [],
                     userRemoteConfigs: [[
-                        credentialsId: 'is-apps-ssh-key',
-                        url: 'git@github.com:---Limited/booking-ui.git'
+                        credentialsId: 'my-app-ssh-key',
+                        url: 'git@github.com:abc-companyt/booking-ui.git'
                     ]]
                 )
             }
         }
 
-        /*****************************************
-         * CHECKOUT CONFIG REPO
-         *****************************************/
-        stage('Checkout Config Repo') {
+        stage('Checkout my-modernization-apps-deployment') {
             steps {
-                dir('IS-modernization-apps-deployment') {
+                dir('my-modernization-apps-deployment') {
                     checkout scmGit(
                         branches: [[name: '*/master']],
+                        extensions: [],
                         userRemoteConfigs: [[
-                            credentialsId: 'is-apps-ssh-key',
-                            url: 'git@github.com:---Limited/-modernization-apps-deployment.git'
+                            credentialsId: 'my-app-ssh-key',
+                            url: 'git@github.com:abc-companyt/my-modernization-apps-deployment.git'
                         ]]
                     )
                 }
             }
         }
 
-        /*****************************************
-         * SELECT NODE VERSION USING NVM
-         *****************************************/
+        /* ---------------------------------------------------------
+         * SELECT NODE VERSION
+         * --------------------------------------------------------- */
         stage('Select Node Version') {
             steps {
                 bat """
-                echo Available Node Versions:
-                nvm list
-
-                echo Switching to Node ${NODE_VERSION}...
-                nvm use ${NODE_VERSION}
-
-                echo Active Node Version:
-                node -v
+                    echo Switching to Node ${params.NODE_VERSION}...
+                    nvm use ${params.NODE_VERSION}
+                    node -v
+                    npm -v
                 """
             }
         }
 
-        /*****************************************
-         * VALIDATE NODE COMPATIBILITY
-         *****************************************/
-        stage('Validate Node Version') {
-            steps {
-                script {
-                    def version = bat(script: "node -v", returnStdout: true).trim()
-                    echo "Detected Node Version: ${version}"
-
-                    if (BRANCH == "prod" && !version.startsWith("v18")) {
-                        error "Production builds require Node 18.x — found ${version}"
-                    }
-                }
-            }
-        }
-
-        /*****************************************
-         * COPY ENV CONFIGURATION FILES
-         *****************************************/
-        stage('Copy Config File') {
+        /* ---------------------------------------------------------
+         * COPY DEV CONFIG FILE
+         * --------------------------------------------------------- */
+        stage('Copy config file') {
             steps {
                 bat """
-                xcopy /s /y ^
-                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\-modernization-apps-deployment\\booking-ui\\prod" ^
-                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\apps\\booking\\src\\assets\\environments"
+                echo Copying environment config files...
+                xcopy /s /y "${ENV_SRC}" "${ENV_DEST}"
                 """
             }
         }
 
-        /*****************************************
-         * INSTALL DEPENDENCIES & BUILD BOOKING UI
-         *****************************************/
-        stage('Install & Build') {
+        /* ---------------------------------------------------------
+         * BUILD DEV VERSION
+         * --------------------------------------------------------- */
+        stage('Build Dev') {
             steps {
-                bat """
-                echo Installing dependencies...
-                npm install --legacy-peer-deps --force
-
-                npm install -g nx
-                npm install -g @azure/static-web-apps-cli
-
-                echo Nx Version:
-                nx --version
-
-                echo Building booking...
-                nx build booking --aot --output-hashing=all --configuration=production --skip-nx-cache --no-cloud
-                """
+                bat 'npm install --force'
+                bat 'npm install -g nx'
+                bat 'npm install -g @azure/static-web-apps-cli'
+                bat 'nx --version'
+                bat 'nx build sample-ui --configuration=production --skip-nx-cache --no-cloud --verbose'
             }
         }
 
-        /*****************************************
-         * PREPARE OUTPUT DIRECTORY
-         *****************************************/
-        stage('Flatten Nx dist output') {
-            steps {
-                bat """
-                echo Flattening build output...
-                xcopy /s /y ^
-                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist\\apps\\booking" ^
-                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist"
+        /* ---------------------------------------------------------
+		 * DEPLOY TO SWA (DEV)
+		 * --------------------------------------------------------- */
+		stage('Deploy to Azure SWA (DEV)') {
+			steps {
+				bat """
+					echo Switching Node to 18.18.2 for SWA deploy...
+					nvm use 18.18.2
+					node -v
+					swa deploy --app-location "dist/apps/sample-ui" --env "production" --deployment-token "123-456-b890-48ca-90dc-890"
+				"""
+			}
+		}
 
-                rmdir /s /q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist\\apps"
-                """
-            }
-        }
-
-        /*****************************************
-         * DEPLOY TO AZURE STATIC WEB APP
-         *****************************************/
-        stage('Deploy to Azure SWA') {
-            steps {
-                bat """
-                swa deploy "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist" ^
-                    --app-name static-webapp ^
-                    --deployment-token ----- ^
-                    --env production
-                """
-            }
-        }
-
-        /*****************************************
-         * OPTIONAL SECURITY / QUALITY STEPS
-         *****************************************/
-
-        /*
-        stage('Snyk Security Test') {
-            steps {
-                snykSecurity organisation: 'qw-abc',
-                             severity: 'critical',
-                             snykInstallation: 'Snyk_latest',
-                             snykTokenId: 'org-snyk-api-token',
-                             targetFile: 'package.json'
-            }
-        }
-
-        stage('Run Jest Tests') {
-            steps {
-                bat 'cd apps\\booking && npx jest --coverage'
-            }
-        }
-
-        stage('SonarCloud Analysis') {
-            steps {
-                withSonarQubeEnv('SonarCloud') {
-                    bat 'npm run sonar'
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                timeout(time: 1, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-        */
-
-    } // stages
-
-    /*****************************************
-     * POST ACTIONS
-     *****************************************/
-    post {
-        success {
-            echo "Build & Deployment Successful!"
-        }
-        failure {
-            echo "Build Failed!"
-        }
     }
 }
+
 
 ```
 
