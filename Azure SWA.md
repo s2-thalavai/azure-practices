@@ -324,7 +324,7 @@ swa deploy --app-location build --deployment-token <your-token>
 
 The output will show URL like:
 
-`Project deployed to https://your-site-id.azurestaticapps.net 🚀` 
+`Project deployed to https://your-site-id.azurestaticapps.net` 
 
 
 ## folder structure you deployed
@@ -526,7 +526,7 @@ pipeline {
         /*
         stage('Snyk Security Test') {
             steps {
-                snykSecurity organisation: 'soma-aravinda',
+                snykSecurity organisation: 'qw-abc',
                              severity: 'critical',
                              snykInstallation: 'Snyk_latest',
                              snykTokenId: 'org-snyk-api-token',
