@@ -33,7 +33,7 @@ Replace content with:
 
 ----------
 
-# **2. Add Azure Static Web Apps configuration**
+# **2. Add Azure Static Web Apps configuration (public internet)**
 
 Create file at root:
 
