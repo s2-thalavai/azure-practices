@@ -359,3 +359,219 @@ cp staticwebapp.config.json build/
 ``` 
 
 Each deploy should use the production `build` folder.
+
+------------
+
+-----------------
+
+## Jenkinsfile With Multi-Node
+
+```groovy
+pipeline {
+    agent any
+
+    /*****************************************
+     * PARAMETERS
+     *****************************************/
+    parameters {
+        choice(
+            name: 'NODE_VERSION',
+            choices: ['14.21.3', '16.20.2', '18.18.2', '20.19.0'],
+            description: 'Select Node version for this build'
+        )
+
+        string(
+            name: 'BRANCH',
+            defaultValue: 'master',
+            description: 'Branch to checkout and build'
+        )
+    }
+
+    stages {
+
+        /*****************************************
+         * CHECKOUT BOOKING-UI
+         *****************************************/
+        stage('Checkout booking-ui') {
+            steps {
+                checkout scmGit(
+                    branches: [[name: "*/${BRANCH}"]],
+                    userRemoteConfigs: [[
+                        credentialsId: 'is-apps-ssh-key',
+                        url: 'git@github.com:---Limited/booking-ui.git'
+                    ]]
+                )
+            }
+        }
+
+        /*****************************************
+         * CHECKOUT CONFIG REPO
+         *****************************************/
+        stage('Checkout Config Repo') {
+            steps {
+                dir('IS-modernization-apps-deployment') {
+                    checkout scmGit(
+                        branches: [[name: '*/master']],
+                        userRemoteConfigs: [[
+                            credentialsId: 'is-apps-ssh-key',
+                            url: 'git@github.com:---Limited/-modernization-apps-deployment.git'
+                        ]]
+                    )
+                }
+            }
+        }
+
+        /*****************************************
+         * SELECT NODE VERSION USING NVM
+         *****************************************/
+        stage('Select Node Version') {
+            steps {
+                bat """
+                echo Available Node Versions:
+                nvm list
+
+                echo Switching to Node ${NODE_VERSION}...
+                nvm use ${NODE_VERSION}
+
+                echo Active Node Version:
+                node -v
+                """
+            }
+        }
+
+        /*****************************************
+         * VALIDATE NODE COMPATIBILITY
+         *****************************************/
+        stage('Validate Node Version') {
+            steps {
+                script {
+                    def version = bat(script: "node -v", returnStdout: true).trim()
+                    echo "Detected Node Version: ${version}"
+
+                    if (BRANCH == "prod" && !version.startsWith("v18")) {
+                        error "Production builds require Node 18.x — found ${version}"
+                    }
+                }
+            }
+        }
+
+        /*****************************************
+         * COPY ENV CONFIGURATION FILES
+         *****************************************/
+        stage('Copy Config File') {
+            steps {
+                bat """
+                xcopy /s /y ^
+                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\-modernization-apps-deployment\\booking-ui\\prod" ^
+                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\apps\\booking\\src\\assets\\environments"
+                """
+            }
+        }
+
+        /*****************************************
+         * INSTALL DEPENDENCIES & BUILD BOOKING UI
+         *****************************************/
+        stage('Install & Build') {
+            steps {
+                bat """
+                echo Installing dependencies...
+                npm install --legacy-peer-deps --force
+
+                npm install -g nx
+                npm install -g @azure/static-web-apps-cli
+
+                echo Nx Version:
+                nx --version
+
+                echo Building booking...
+                nx build booking --aot --output-hashing=all --configuration=production --skip-nx-cache --no-cloud
+                """
+            }
+        }
+
+        /*****************************************
+         * PREPARE OUTPUT DIRECTORY
+         *****************************************/
+        stage('Flatten Nx dist output') {
+            steps {
+                bat """
+                echo Flattening build output...
+                xcopy /s /y ^
+                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist\\apps\\booking" ^
+                "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist"
+
+                rmdir /s /q "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist\\apps"
+                """
+            }
+        }
+
+        /*****************************************
+         * DEPLOY TO AZURE STATIC WEB APP
+         *****************************************/
+        stage('Deploy to Azure SWA') {
+            steps {
+                bat """
+                swa deploy "C:\\ProgramData\\Jenkins\\.jenkins\\workspace\\booking-ui-prod\\dist" ^
+                    --app-name static-webapp ^
+                    --deployment-token ----- ^
+                    --env production
+                """
+            }
+        }
+
+        /*****************************************
+         * OPTIONAL SECURITY / QUALITY STEPS
+         *****************************************/
+
+        /*
+        stage('Snyk Security Test') {
+            steps {
+                snykSecurity organisation: 'soma-aravinda',
+                             severity: 'critical',
+                             snykInstallation: 'Snyk_latest',
+                             snykTokenId: 'org-snyk-api-token',
+                             targetFile: 'package.json'
+            }
+        }
+
+        stage('Run Jest Tests') {
+            steps {
+                bat 'cd apps\\booking && npx jest --coverage'
+            }
+        }
+
+        stage('SonarCloud Analysis') {
+            steps {
+                withSonarQubeEnv('SonarCloud') {
+                    bat 'npm run sonar'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        */
+
+    } // stages
+
+    /*****************************************
+     * POST ACTIONS
+     *****************************************/
+    post {
+        success {
+            echo "Build & Deployment Successful!"
+        }
+        failure {
+            echo "Build Failed!"
+        }
+    }
+}
+
+```
+
+-----
