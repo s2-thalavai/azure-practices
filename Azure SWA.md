@@ -204,6 +204,68 @@ Change config to:
 Deploy again.
 
 -----
+
+## BUILD Stage (Node 16)
+
+```groovy
+
+stage('Select Node Version for Build') {
+    steps {
+        bat """
+        echo Switching Node to 16.20.2 for Angular build...
+        nvm use 16.20.2
+        node -v
+        npm -v
+        """
+    }
+}
+```
+
+## DEPLOY Stage (Node 18)
+
+```groovy
+
+stage('Deploy to Azure SWA') {
+    steps {
+        bat """
+        echo Switching Node to 18.18.2 for SWA deployment...
+        nvm use 18.18.2
+        node -v
+        npm -v
+
+        echo Deploying application...
+        swa deploy ./dist ^
+            --app-name seat-booking-swa-nonprod ^
+            --deployment-token YOUR_DEPLOYMENT_TOKEN ^
+            --env production
+        """
+    }
+}
+```
+
+### Angular 15 + NGCC build is stable on:
+
+1. Node 14
+2. Node 16
+
+### Angular 15 build is unstable on:
+
+1. Node 18
+(NGCC errors like you experienced)
+
+### SWA CLI requires:
+
+1. Node 18+
+
+So the correct process is:
+
+| Stage            | Node Version |
+| ---------------- | ------------ |
+| Install deps     | Node 16      |
+| Build Angular    | Node 16      |
+| Package artifact | Node 16      |
+| Deploy to SWA    | **Node 18**  |
+
 -----
 
 ## **2. Create React sample app (recommended way)**
